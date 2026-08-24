@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 480" width="480" height="480" role="img" aria-label="상품 사진 없음">
+  <rect width="480" height="480" fill="#F5F8FC"/>
+  <g transform="translate(240 232)" fill="none" stroke="#C3CEDE" stroke-width="10" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M0-72 78-28 0 16-78-28Z"/>
+    <path d="M-78-28V56L0 100V16"/>
+    <path d="M78-28V56L0 100"/>
+  </g>
+  <text x="240" y="376" text-anchor="middle" font-family="Pretendard, system-ui, sans-serif" font-size="26" fill="#9AA8BE">사진 준비 중</text>
+</svg>
