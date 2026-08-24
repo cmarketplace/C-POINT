@@ -18,6 +18,12 @@ import { ShopProvider } from "../providers/ShopProvider";
  * 그러면 쇼핑몰 전 화면이 500 이 된다(게이트도 같은 이유로 로컬에서는 통과시킨다).
  */
 export default async function ShopLayout({ children }: { children: React.ReactNode }) {
+  // Provider 는 **항상** 세운다. 빼면 `useSession()` 이 컨텍스트 없이 불려 헤더가 터진다
+  // (개발은 throw, 운영 빌드는 undefined 구조분해 → prerender 실패).
+  //
+  // 대신 미설정일 때 `null` 을 «이미 확인했고 비어 있다» 로 넘긴다. `undefined` 로 두면
+  // 클라이언트가 `/api/auth/session` 을 부르는데, 설정이 없는 그 경로는 MissingSecret 으로
+  // 떨어져 콘솔이 빨갛게 된다. `null` 이면 그 왕복 자체가 일어나지 않는다.
   const session = IS_SSO_CONFIGURED ? await auth() : null;
 
   return (

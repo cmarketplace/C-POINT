@@ -4,14 +4,16 @@ import Image from 'next/image'
 import { signInWithCmarket } from '@/app/actions/auth'
 import { auth } from '@/auth'
 import { TENANT } from '@/config/tenant'
-import { IS_SSO_CONFIGURED, isAllowedGroup } from '@/lib/shop-auth'
+import { IS_SSO_CONFIGURED, isAllowedGroup, safeNextPath } from '@/lib/shop-auth'
 
-/** 앱 내부 경로만 허용한다 — 열린 리다이렉트를 막는다. */
-function safeNext(raw: string | undefined): string {
-  if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return '/shop'
-  return raw
-}
-
+/**
+ * 로그인 화면.
+ *
+ * **평소에는 이 화면을 보지 않는다.** `/shop` 접근은 `proxy.ts` 가 씨마켓으로 곧장 보내고,
+ * 본진에 로그인해 있으면 화면 전환만으로 들어온다. 여기는 그 흐름이 **끊겼을 때** 서는 자리다 —
+ * 기관 자격 거절, 설정 미비, 씨마켓에서 로그인을 취소하고 돌아온 경우, 그리고 직접 방문.
+ * 그래서 버튼이 남아 있다: 사유를 보고 다시 시도할 곳이 필요하다.
+ */
 export default async function LoginPage({
   searchParams,
 }: {
@@ -35,7 +37,7 @@ export default async function LoginPage({
 
   // 이미 자격을 갖춘 세션이면 로그인 화면을 보여줄 이유가 없다.
   if (session?.user && isAllowedGroup(session.user.groupCode)) {
-    redirect(safeNext(next))
+    redirect(safeNextPath(next))
   }
 
   return (
@@ -58,7 +60,7 @@ export default async function LoginPage({
       ) : null}
 
       <form action={signInWithCmarket} className="mt-8">
-        <input type="hidden" name="redirectTo" value={safeNext(next)} />
+        <input type="hidden" name="redirectTo" value={safeNextPath(next)} />
         <button
           type="submit"
           className="bg-primary hover:bg-primary-dark w-full cursor-pointer rounded-control px-5 py-3.5 text-sm font-semibold text-white transition-colors"

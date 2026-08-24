@@ -14,15 +14,18 @@ const gate = auth((request) => {
   const session = request.auth
 
   if (!session?.user) {
-    // 로그인 화면으로 보내고 원래 가려던 곳을 남긴다. authorize 로 직접 튕기지 않는 이유는
-    // 씨마켓 세션이 없는 방문자가 영문 모르고 남의 로그인 화면을 보게 되기 때문이다.
-    const loginUrl = new URL('/login', request.nextUrl.origin)
-    loginUrl.searchParams.set('next', request.nextUrl.pathname + request.nextUrl.search)
-    return NextResponse.redirect(loginUrl)
+    // **로그인 화면을 거치지 않고** 곧장 씨마켓으로 보낸다 — 본진에 로그인해 있는 사람은
+    // 버튼을 누르는 단계 없이 화면 전환만으로 들어와야 한다는 것이 이 몰의 요구다.
+    // (KCL 몰은 반대로 `/login` 을 한 번 세운다. 그쪽은 단일 기관 폐쇄몰이라 «남의 로그인
+    //  화면이 영문 모르고 뜨는» 쪽을 더 무겁게 봤다. 이 몰은 씨마켓 회원만 오는 곳이다.)
+    const startUrl = new URL('/api/auth/start', request.nextUrl.origin)
+    startUrl.searchParams.set('next', request.nextUrl.pathname + request.nextUrl.search)
+    return NextResponse.redirect(startUrl)
   }
 
   if (!isAllowedGroup(session.user.groupCode)) {
-    // 씨마켓 로그인은 됐지만 이 몰의 기관 소속이 아니다 — 로그인 반복으로 몰지 않고 사유를 보여준다.
+    // 씨마켓은 열어 줬는데 이 몰이 `CMARKET_GROUP_CODES` 로 더 좁혀 둔 경우다(선택값).
+    // 로그인 반복으로 몰지 않고 사유를 보여준다.
     return NextResponse.redirect(new URL('/login?error=not_allowed', request.nextUrl.origin))
   }
 
