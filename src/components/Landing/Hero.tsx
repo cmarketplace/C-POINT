@@ -1,164 +1,220 @@
 import Link from 'next/link'
 
 /**
- * 히어로 — 디자인 시스템 §5 의 「A. 표지」 원형.
+ * 히어로 — 옅은 파랑 틴트 위의 «모노톤 일러스트» 형.
  *
- * 지켜야 할 것 넷:
- *  1. 흰 배경 · 넓은 여백. 진한 색 면으로 채우지 않는다(챕터 표지 밖에서는 금지).
- *  2. **타이틀은 2줄이 표준.** 의미 단위로 직접 개행한다.
- *  3. 강조는 색으로 한다 — 한 문장에서 핵심어 하나만 primary 로 바꾼다. 크기로 하지 않는다.
- *  4. 본문은 타이틀보다 한참 작고 회색이며 굵게 하지 않는다.
+ * 한 색 계열만 쓴다. 배경 틴트 → 배경 선 → 장바구니 → 타이틀까지 전부 파랑 한 축이고,
+ * 다른 색상환을 끌어오지 않는다. 디자인 시스템 §3 의 「파랑·시안·민트·회색만」과 같은 결론.
  *
- * 떠 있는 카드 두 장은 «지어낸 지표» 가 아니라 **이 몰이 실제로 하는 일의 UI 조각**이다.
- * 참고한 레퍼런스는 여기에 「350%」 같은 숫자 카드를 띄웠는데, 그 자리에 근거 없는 수치를
- * 넣는 것은 디자인 시스템 §2 「근거 없는 최상급 표현」 금지에 정면으로 걸린다. 그래서
- * 카드에는 숫자를 빼고 구조만 남겼다 — 실측값은 아래 `Stats` 가 스냅샷에서 가져온다.
+ * 타이틀은 navy, 핵심어만 primary 다. 같은 계열 안에서 명도로만 강조가 갈리므로 §4 의
+ * 「강조는 색으로, 크기로 하지 않는다」를 지키면서 모노톤도 깨지지 않는다.
+ * 대비 실측: navy on #E5F2FA = 13.5:1, primary on #E5F2FA = 4.5:1 (둘 다 AA).
+ *
+ * 장바구니에 담기는 것은 실험실 소모품이다 — 이 몰이 실제로 파는 품목이라야 첫 화면이
+ * 무엇을 파는 곳인지 말해 준다. 참고한 레퍼런스의 옷·가방을 그대로 두면 남의 몰이 된다.
  */
 export default function Hero() {
   return (
-    <section className="relative overflow-hidden">
-      {/* 시그니처 ⑧ 방사형 옅은 광 — 흰 배경의 단조로움만 덜어내는 수준으로. */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-[560px] bg-[radial-gradient(60%_70%_at_50%_0%,var(--color-blue-tint-2)_0%,var(--color-blue-tint)_45%,transparent_100%)]"
-      />
+    <section className="relative isolate flex min-h-[640px] items-center overflow-hidden bg-[linear-gradient(160deg,#f4f9fd_0%,#e5f2fa_55%,#dceefb_100%)] lg:min-h-[86vh]">
+      <BackgroundTracks />
 
-      {/* 시그니처 ① 대각선 그라데이션 스트라이프 — 굵기 다른 선을 나란히, 화면 밖으로 뻗는다.
-        * 표지에서만 쓴다(본문 섹션에는 쓰지 않는다).
-        *
-        * 좁은 화면에서는 내린다. 코너가 작아 스트라이프가 eyebrow 줄을 가로질러
-        * 「씨마켓 큐레이션 구매」 위로 겹쳐 읽혔다 — 장식이 카피를 방해하면 장식이 진다. */}
-      <div aria-hidden="true" className="pointer-events-none absolute -top-24 -left-24 hidden h-64 w-[520px] -rotate-45 opacity-70 sm:block">
-        <div className="from-brand-from to-brand-to h-3 w-full rounded-full bg-gradient-to-r" />
-        <div className="from-brand-from to-brand-to mt-4 h-1.5 w-4/5 rounded-full bg-gradient-to-r opacity-70" />
-        <div className="from-brand-from to-brand-to mt-3 h-1 w-3/5 rounded-full bg-gradient-to-r opacity-45" />
-      </div>
-      <div aria-hidden="true" className="pointer-events-none absolute -top-16 -right-28 hidden h-52 w-[420px] -rotate-45 opacity-55 sm:block">
-        <div className="from-brand-to to-brand-from h-2.5 w-full rounded-full bg-gradient-to-r" />
-        <div className="from-brand-to to-brand-from mt-3.5 h-1.5 w-2/3 rounded-full bg-gradient-to-r opacity-70" />
-      </div>
-
-      <div className="container-content relative px-5 pt-16 pb-14 sm:px-10 sm:pt-24 sm:pb-20">
-        <div className="relative mx-auto max-w-3xl text-center">
-          {/* eyebrow — 15~16px / 500 / Primary Blue */}
-          <p className="text-primary flex items-center justify-center gap-2 text-[15px] font-medium">
-            <span className="bg-primary inline-block h-1.5 w-1.5 rounded-full" aria-hidden="true" />
+      <div className="container-content relative w-full px-5 py-20 sm:px-10 lg:py-24">
+        <div className="mx-auto max-w-3xl text-center">
+          {/* 아웃라인 pill — 면을 깔지 않고 테두리만. 레퍼런스의 「인사이트」 자리. */}
+          <span className="text-primary ring-primary/35 inline-flex h-9 items-center rounded-full px-5 text-[13px] font-medium ring-1">
             씨마켓 큐레이션 구매
-          </p>
+          </span>
 
-          {/* 타이틀 2줄. 핵심어 하나만 파랑. */}
-          <h1 className="text-text mt-5 text-[34px] leading-[1.28] font-semibold sm:text-[52px]">
+          <h1 className="text-navy mt-7 text-[40px] leading-[1.2] font-semibold tracking-tight sm:text-[54px] lg:text-[64px]">
             기관 구매에 필요한 것만,
             <br />
-            <span className="text-primary">검증된 단가</span>로 모았습니다
+            <span className="text-primary">검증된 단가</span>로
           </h1>
 
-          <p className="text-muted mx-auto mt-7 max-w-xl text-[15px] leading-[1.8] sm:text-[17px]">
+          <p className="text-muted mx-auto mt-7 max-w-xl text-[15px] leading-[1.85] sm:text-[17px]">
             세모 물품관리시스템이 「이 몰 × 품목 × 공급사」로 승인한 조합만 목록에 오릅니다.
             같은 품목을 여러 곳이 대면 언제나 그중 가장 싼 값으로 담깁니다.
           </p>
 
-          <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
             <Link
               href="/shop"
-              className="bg-primary hover:bg-primary-dark flex h-13 items-center rounded-control px-7 text-sm font-semibold text-white transition-colors"
+              className="bg-primary hover:bg-primary-dark flex h-13 items-center rounded-control px-8 text-sm font-semibold text-white transition-colors"
             >
               상품 보러 가기
             </Link>
-            {/* 보조 액션도 면으로 구분한다 — 테두리 버튼은 쓰지 않는다. */}
             <Link
               href="#contrast"
-              className="bg-bg text-text hover:bg-bg-secondary flex h-13 items-center rounded-control px-7 text-sm font-semibold transition-colors"
+              className="text-primary ring-primary/30 flex h-13 items-center rounded-control bg-white/70 px-8 text-sm font-semibold ring-1 transition-colors hover:bg-white"
             >
               무엇이 달라지나
             </Link>
           </div>
         </div>
 
-        {/* ── 떠 있는 카드 ──────────────────────────────────────
-          * 좁은 화면에서는 내린다. 폭 350px 에 카드를 띄우면 타이틀 위로 겹쳐 글이 안 읽힌다. */}
-        <FloatingOfferCard />
-        <FloatingApprovalCard />
-
+        {/* 일러스트는 텍스트 아래 가운데. */}
+        <div className="mt-14 lg:mt-16">
+          <BasketIllustration />
+        </div>
       </div>
     </section>
   )
 }
 
 /**
- * 「같은 품목, 여러 공급처」 카드.
+ * 배경 선 — 라운드 트랙 · 점선 · 원형 노드.
  *
- * 상세 화면의 `OfferList` 가 실제로 그리는 구조 그대로다 — 1번만 값이 살아 있고 나머지는
- * 취소선으로 죽는다. 숫자를 넣지 않은 이유: 이 몰에 아직 승인 품목이 없어서 여기 적을 수
- * 있는 실제 단가가 없다. 막대만으로도 «여러 곳 중 하나가 최저가로 뽑힌다» 는 읽힌다.
+ * 대비를 낮게 유지한다. 이 선들이 눈에 띄기 시작하면 타이틀이 진다.
+ * `slice` 로 잘라내므로 화면 비율이 바뀌어도 선이 찌그러지지 않는다.
  */
-function FloatingOfferCard() {
+function BackgroundTracks() {
   return (
-    <div className="absolute top-40 left-[calc(50%-38rem)] hidden xl:block">
-      <div className="w-56 -rotate-[6deg] rounded-md bg-white p-4 shadow-[0_18px_44px_rgba(20,40,80,0.10)]">
-        <p className="text-muted text-[11px] font-medium">이 상품을 대는 곳</p>
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 1600 900"
+      preserveAspectRatio="xMidYMid slice"
+      className="text-primary pointer-events-none absolute inset-0 -z-10 h-full w-full"
+    >
+      <g fill="none" stroke="currentColor" strokeWidth="2" opacity="0.16">
+        <rect x="-160" y="-220" width="620" height="620" rx="200" />
+        <rect x="1080" y="-300" width="700" height="700" rx="240" />
+        <rect x="240" y="520" width="900" height="640" rx="260" />
+        <rect x="1240" y="440" width="560" height="560" rx="190" />
+      </g>
 
-        <ul className="mt-3 space-y-2.5">
-          <li className="flex items-center gap-2">
-            <span className="bg-highlight-soft text-highlight-strong rounded-xs px-1.5 py-0.5 text-[10px] font-semibold">
-              최저가
-            </span>
-            <span className="bg-highlight h-1.5 flex-1 rounded-full" />
-          </li>
-          <li className="flex items-center gap-2 opacity-45">
-            <span className="text-muted w-[38px] text-[10px]">공급처 2</span>
-            <span className="bg-border h-1.5 flex-1 rounded-full" />
-          </li>
-          <li className="flex items-center gap-2 opacity-45">
-            <span className="text-muted w-[38px] text-[10px]">공급처 3</span>
-            <span className="bg-border h-1.5 flex-1 rounded-full" />
-          </li>
-        </ul>
+      <g fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="12 14" opacity="0.22">
+        <path d="M0 250 H520" />
+        <path d="M1010 170 H1600" />
+        <path d="M0 690 H360" />
+        <path d="M1120 760 H1600" />
+        <path d="M760 0 V150" />
+      </g>
 
-        <p className="text-muted mt-3 text-[10px] leading-4">
-          어디서 오는지는 공개되지 않습니다
-        </p>
-      </div>
+      {/* 원형 노드 — 흰 면 + 파란 링. 선이 만나는 자리에만 둔다. */}
+      <g opacity="0.5">
+        <TrackNode cx={520} cy={250} />
+        <TrackNode cx={1010} cy={170} />
+        <TrackNode cx={360} cy={690} />
+        <TrackNode cx={1120} cy={760} />
+      </g>
+    </svg>
+  )
+}
 
-      {/* 시그니처 ② 파란 점선 커넥터 + 도트. 카드 안에 두어야 본문 옆에 붙어 따라다닌다. */}
-      <svg
-        aria-hidden="true"
-        viewBox="0 0 96 56"
-        className="text-accent-dark pointer-events-none absolute -right-[5.5rem] bottom-3 h-14 w-24"
-      >
+function TrackNode({ cx, cy }: { cx: number; cy: number }) {
+  return (
+    <>
+      <circle cx={cx} cy={cy} r="20" fill="#ffffff" />
+      <circle cx={cx} cy={cy} r="20" fill="none" stroke="currentColor" strokeWidth="3" opacity="0.55" />
+      <circle cx={cx} cy={cy} r="8" fill="currentColor" opacity="0.45" />
+    </>
+  )
+}
+
+/**
+ * 장바구니 + 쏟아져 들어가는 카드.
+ *
+ * 바구니는 SVG(플랫 단색), 카드는 HTML 이다 — 프로스티드 유리는 `backdrop-blur` 로만
+ * 나오는데 SVG 안에서는 그 필터가 배경을 못 읽는다. 그래서 층을 나눴다.
+ */
+function BasketIllustration() {
+  return (
+    <div className="relative mx-auto aspect-[5/4] w-full max-w-[560px]">
+      {/* 카드가 바구니 «뒤» 에서 올라와 «앞» 으로 담기도록 층을 세 겹으로 쌓는다. */}
+      <FrostedCard className="top-[8%] left-[16%] h-[86px] w-[74px] -rotate-[18deg] sm:h-[104px] sm:w-[90px]">
+        <FlaskIcon />
+      </FrostedCard>
+      <FrostedCard className="top-[2%] left-[42%] h-[80px] w-[70px] rotate-[8deg] sm:h-[96px] sm:w-[84px]">
+        <PetriIcon />
+      </FrostedCard>
+      <FrostedCard className="top-[13%] right-[14%] h-[84px] w-[72px] rotate-[21deg] sm:h-[100px] sm:w-[88px]">
+        <MaskIcon />
+      </FrostedCard>
+
+      <svg viewBox="0 0 560 448" className="absolute inset-0 h-full w-full" aria-hidden="true">
+        {/* 손잡이 — 바구니보다 먼저 그려 뒤로 보낸다. */}
         <path
-          d="M2 48 C 26 44, 48 22, 74 8"
+          d="M96 236 V196 a44 44 0 0 1 44 -44 h34"
           fill="none"
-          stroke="currentColor"
-          strokeWidth="1.6"
+          stroke="var(--color-primary)"
+          strokeWidth="20"
           strokeLinecap="round"
-          strokeDasharray="4 6"
         />
-        <circle cx="78" cy="7" r="4" className="fill-primary" />
+
+        {/* 바구니 — 위가 넓은 사다리꼴. 아래 모서리만 둥글다. */}
+        <path
+          d="M92 232 H500 L446 404 a24 24 0 0 1 -23 17 H169 a24 24 0 0 1 -23 -17 Z"
+          fill="var(--color-primary)"
+        />
+
+        {/* 담긴 것들의 그림자 — 형태를 그리지 않고 번진 덩어리로만 둔다. */}
+        <g filter="url(#soften)" opacity="0.5">
+          <ellipse cx="216" cy="300" rx="52" ry="22" fill="var(--color-navy)" />
+          <ellipse cx="356" cy="292" rx="44" ry="18" fill="var(--color-navy)" />
+          <ellipse cx="288" cy="344" rx="62" ry="20" fill="var(--color-navy)" />
+        </g>
+
+        {/* 위 테두리 하이라이트 — 바구니 안쪽이 비어 보이지 않게. */}
+        <path d="M92 232 H500 l-8 26 H100 Z" fill="#ffffff" opacity="0.22" />
+
+        <defs>
+          <filter id="soften" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="14" />
+          </filter>
+        </defs>
       </svg>
+
+      {/* 바구니 «앞» 으로 걸쳐지는 카드 — 담기는 중인 것. */}
+      <FrostedCard className="top-[38%] left-[26%] h-[90px] w-[78px] -rotate-[9deg] sm:h-[108px] sm:w-[94px]">
+        <BeakerIcon />
+      </FrostedCard>
     </div>
   )
 }
 
-/** 「세모 승인」 카드. 이 몰의 상품이 어디서 오는지를 한 줄로 말한다. */
-function FloatingApprovalCard() {
+/** 프로스티드 카드 — 반투명 흰 면 + backdrop blur + 밝은 테두리. */
+function FrostedCard({ className, children }: { className: string; children: React.ReactNode }) {
   return (
-    <div className="absolute top-52 right-[calc(50%-38rem)] hidden w-52 rotate-[5deg] rounded-md bg-white p-4 shadow-[0_18px_44px_rgba(20,40,80,0.10)] xl:block">
-      <div className="flex items-center gap-2.5">
-        <span className="bg-blue-tint-2 text-primary flex h-8 w-8 items-center justify-center rounded-control">
-          <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4">
-            <circle cx="10" cy="10" r="9" className="fill-primary" />
-            <path d="m6 10.2 2.6 2.6L14 7.4l-1.5-1.5-3.9 3.9-1.1-1.1L6 10.2Z" fill="#fff" />
-          </svg>
-        </span>
-        <p className="text-text text-[13px] font-semibold">세모 승인 품목</p>
-      </div>
-
-      <p className="text-muted mt-3 text-[11px] leading-5">
-        이 몰 × 품목 × 공급사
-        <br />
-        세 축이 모두 승인된 것만
-      </p>
+    <div
+      className={`text-primary absolute z-10 flex items-center justify-center rounded-[18px] bg-white/55 shadow-[0_16px_34px_-12px_rgba(1,35,80,0.35)] ring-1 ring-white/70 backdrop-blur-md ${className}`}
+    >
+      {children}
     </div>
+  )
+}
+
+/* ── 아이콘 ──────────────────────────────────────────────
+ * 실루엣으로만 그린다. 선 아이콘을 쓰면 배경 선과 굵기가 겹쳐 둘 다 지저분해진다. */
+
+function FlaskIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="h-9 w-9 sm:h-11 sm:w-11">
+      <path d="M9.4 2.4h5.2v1.7h-1.1v5.2l5 9.7c.6 1.2-.2 2.6-1.6 2.6H6.1c-1.4 0-2.2-1.4-1.6-2.6l5-9.7V4.1H9.4z" />
+    </svg>
+  )
+}
+
+function PetriIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="h-9 w-9 sm:h-11 sm:w-11">
+      <circle cx="12" cy="12" r="9" opacity="0.35" />
+      <circle cx="12" cy="12" r="5.6" />
+    </svg>
+  )
+}
+
+function BeakerIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="h-9 w-9 sm:h-11 sm:w-11">
+      <path d="M6.4 2.6h11.2v1.8h-1.5v12.4a4 4 0 0 1-4 4h-.2a4 4 0 0 1-4-4V4.4H6.4z" />
+    </svg>
+  )
+}
+
+function MaskIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="h-9 w-9 sm:h-11 sm:w-11">
+      <path d="M2.6 8.6c0-1.1.9-1.9 2-1.7l5.9 1.1c1 .2 2 .2 3 0l5.9-1.1c1.1-.2 2 .6 2 1.7v3.9c0 3.6-2.7 6.6-6.3 7l-1.3.2c-.9.1-1.8.1-2.7 0l-1.3-.2c-3.6-.4-6.3-3.4-6.3-7V8.6z" />
+    </svg>
   )
 }
