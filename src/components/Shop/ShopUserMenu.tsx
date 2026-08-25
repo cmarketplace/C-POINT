@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import { useSession } from 'next-auth/react'
-import { LogOut, UserRound } from 'lucide-react'
+import { LogOut, UserRound, ReceiptText } from 'lucide-react'
 
 import { signOutFromShop } from '@/app/actions/auth'
 import { toShopIdentity } from '@/lib/shop-identity'
@@ -77,6 +78,19 @@ export default function ShopUserMenu() {
           </div>
 
           <div className="bg-border h-px" aria-hidden="true" />
+
+          <Link
+            href="/shop/orders"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="text-muted-strong hover:bg-bg flex w-full items-center gap-2 px-4 py-3.5 text-left text-base font-semibold transition-colors"
+          >
+            <ReceiptText size={18} strokeWidth={1.8} />
+            주문 내역
+          </Link>
+
+          <div className="bg-bg h-px" aria-hidden="true" />
+
 
           <form action={signOutFromShop}>
             <button

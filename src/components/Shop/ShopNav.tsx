@@ -3,7 +3,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, ShoppingCart } from 'lucide-react'
+import { ChevronLeft, ReceiptText, ShoppingCart } from 'lucide-react'
 
 import { TENANT } from '@/config/tenant'
 import { useShop } from '@/app/providers/ShopProvider'
@@ -73,6 +73,16 @@ export default function ShopNav({ showBack = false }: ShopNavProps) {
 
         {/* Navigation */}
         <div className="flex items-center justify-end gap-2">
+          {/* 주문 내역 — 후불몰이라 «언제 결제하는지» 를 보러 오는 화면이다.
+            * 로그인 전에도 링크는 보인다: 누르면 게이트가 로그인 문으로 안내한다. */}
+          <Link
+            href="/shop/orders"
+            className="text-muted-strong hover:bg-bg flex min-h-11 items-center gap-2 rounded-full px-2.5 py-2.5 text-base font-semibold transition-colors sm:px-3"
+          >
+            <ReceiptText size={20} strokeWidth={1.4} />
+            <span className="hidden sm:inline">주문 내역</span>
+          </Link>
+
           {/* Cart */}
           <Link
             href="/shop/cart"
