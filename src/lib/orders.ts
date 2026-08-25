@@ -5,6 +5,13 @@ import {
   stubPlaceOrder,
   type StubOrderLine,
 } from '@/lib/postpaid-mall-stub'
+import { isSemoConfigured } from '@/lib/semo-api'
+import {
+  semoCancelOrder,
+  semoCreateOrder,
+  semoGetOrder,
+  semoListOrders,
+} from '@/lib/semo-orders'
 import type { OrderListPage, OrderShipTo, StorefrontOrder } from '@/lib/order-types'
 
 export { PostpaidMallError as OrderError } from '@/lib/postpaid-mall-stub'
@@ -12,14 +19,12 @@ export { PostpaidMallError as OrderError } from '@/lib/postpaid-mall-stub'
 /**
  * 주문 — **세모 주문 파이프라인으로 가는 이음새.**
  *
- * 실제 주문은 세모 `/external/storefronts/c-point/orders` (파트너 키, 서버 전용)가
- * 받는다: 접수 → 저장 단가 최저 조합 자동매칭 → 판매·매입 계약 → 배송 → 후불 결제·
- * 계산서(엔씨하이·팝빌). 그 경로가 배포되면 이 파일의 구현만 KCL 몰 `semo-orders.ts`
- * 와 같은 fetch 로 갈아 끼운다 — 시그니처는 그쪽 규약에 이미 맞춰 두었다.
+ * `SEMO_API_BASE`/`SEMO_API_KEY` 가 채워진 환경에서는 세모가 정본이다:
+ * 접수 → 저장 단가 최저 조합 자동매칭(«공급사 확정») → 계약·배송·후불 결제
+ * (카드결제창·팝빌 계산서)는 다음 단계. **단가는 세모가 카탈로그에서 재확정한다** —
+ * 세모 모드에서는 화면 스냅샷 단가를 보내지 않으며, 영수증은 서버 확정값만 그린다.
  *
- * 연동 시 달라지는 것 하나: **단가는 세모가 카탈로그에서 재확정한다.** 지금 스텁은
- * 화면 스냅샷 단가를 믿지만, 실연동에서는 화면과 접수 금액이 다를 수 있고 영수증은
- * 서버 확정값만 보여 줘야 한다(이미 그렇게 그린다).
+ * 키가 없으면 로컬 스텁 원장이 자리를 지킨다(개발·데모).
  */
 
 export interface CreateOrderInput {
@@ -30,18 +35,29 @@ export interface CreateOrderInput {
 }
 
 export async function createOrder(input: CreateOrderInput): Promise<StorefrontOrder> {
+  if (isSemoConfigured()) {
+    return semoCreateOrder({
+      memberId: input.memberId,
+      shipTo: input.shipTo,
+      lines: input.lines.map(line => ({ itemId: line.itemId, quantity: line.quantity })),
+      clientOrderKey: input.clientOrderKey,
+    })
+  }
   return stubPlaceOrder(input)
 }
 
 export async function listOrders(memberId: string): Promise<OrderListPage> {
+  if (isSemoConfigured()) return semoListOrders(memberId)
   const orders = stubListOrders(memberId)
   return { orders, total: orders.length }
 }
 
 export async function getOrder(memberId: string, orderNo: string): Promise<StorefrontOrder> {
+  if (isSemoConfigured()) return semoGetOrder(memberId, orderNo)
   return stubGetOrder(memberId, orderNo)
 }
 
 export async function cancelOrder(memberId: string, orderNo: string): Promise<StorefrontOrder> {
+  if (isSemoConfigured()) return semoCancelOrder(memberId, orderNo)
   return stubCancelOrder(memberId, orderNo)
 }

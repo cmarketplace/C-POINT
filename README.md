@@ -92,9 +92,12 @@ npm run landing:stats -- --dry                          # 세기만 한다
 | `/shop/order-complete` | 영수증 — 청구 예정 금액 · «지금 결제된 금액 없음» 안내 |
 | `/shop/orders` | 주문 내역 + 접수·공급사 확정 단계의 취소(두 번 눌러 확정) |
 
-**원장은 아직 로컬 스텁이다** (`src/lib/postpaid-mall-stub.ts` → `var/postpaid-mall-stub.json`).
-주문 정본은 세모 주문 파이프라인으로 연결 예정 — 갈아 끼우는 자리는 `src/lib/orders.ts`
-한 파일뿐이다. FITI 포인트몰과 달리 포인트 원장이 없어 이음새도 하나다.
+**주문 정본은 세모다** — `SEMO_API_BASE`/`SEMO_API_KEY` 가 채워지면 주문이 세모를
+탄다(`src/lib/semo-orders.ts`): 접수 → 자동매칭(«공급사 확정») → 계약·배송·후불
+결제는 다음 단계. 세모 모드에서는 **단가를 보내지 않는다** — 카탈로그가 재확정한다
+(로컬 실측: 화면이 1원을 보내도 서버가 2,288원으로 잡았다). 키가 없으면 로컬 스텁
+(`src/lib/postpaid-mall-stub.ts`)이 같은 규약으로 자리를 지킨다. FITI 포인트몰과
+달리 포인트 축이 없어 이음새도 `orders.ts` 하나다.
 
 SSO 키가 없는 동안은 `.env.local` 의 `SHOP_DEMO_MEMBER` 로 데모 신원을 켜고 눌러 본다
 (`.env.example` 참고 — **운영에 넣으면 안 되는 값이다**).
