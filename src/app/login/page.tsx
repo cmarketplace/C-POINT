@@ -41,7 +41,8 @@ export default async function LoginPage({
   return (
     <LoginShell>
       <p className="text-muted mt-3 text-sm leading-6">
-        {TENANT.orgName} 계정으로 이용하는 폐쇄몰입니다. 씨마켓 계정으로 로그인해 주세요.
+        상품 구경은 로그인 없이 할 수 있습니다. 주문과 주문 내역 확인에만 씨마켓
+        계정이 필요합니다.
       </p>
 
       {error === 'not_allowed' ? (
