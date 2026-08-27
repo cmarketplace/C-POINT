@@ -11,13 +11,26 @@
  * 두 번째 자물쇠). 어느 쪽이든 authorize 단계에서 씨마켓이 이미 한 번 거른 뒤다.
  */
 
-/** 이 몰이 **추가로** 좁히는 기관 그룹. 비면 좁히지 않는다(씨마켓 등록이 그대로 문이다). */
+/**
+ * 이 몰에 입장 가능한 기관 그룹. 쉼표로 여러 개를 적는다(`1009,1032`).
+ *
+ * **비워 두면 전체 허용이다** — C-POINT 는 «모두 개방» 몰로 확정됐다(2026-08-25):
+ * 특정 기관 폐쇄몰이 아니라, 씨마켓 계정만 있으면 누구든 주문할 수 있다. 특정 기관
+ * 전용으로 좁혀야 할 일이 생기면 그때 `.env` 에 코드를 채운다 — 채우는 순간 그
+ * 목록만 통과한다.
+ */
 export const SHOP_ALLOWED_GROUP_CODES: readonly number[] = parseGroupCodes(
   process.env.CMARKET_GROUP_CODES,
 )
 
-/** 로그인이 필요한 경로. `proxy.ts` 의 matcher 와 같은 범위를 가리킨다. */
-export const SHOP_PROTECTED_PREFIX = '/shop'
+/**
+ * 로그인이 필요한 경로 — **내 기록 화면뿐이다.** `proxy.ts` 의 matcher 와 같은 범위.
+ *
+ * 열람(목록·상세·장바구니)은 로그인 없이 공개다. 주문·주문내역·영수증은 후불 계약의
+ * 당사자(씨마켓 회원)가 필요해서 익명일 수 없다 — 주문 API 는 세션 없이 401 이고,
+ * 이 화면들은 로그인 문으로 안내된다.
+ */
+export const SHOP_PROTECTED_PATHS = ['/shop/orders', '/shop/order-complete'] as const
 
 /**
  * SSO 가 실제로 성립하는 설정인가.
@@ -50,7 +63,7 @@ export function isAllowedGroup(groupCode: number | undefined | null): boolean {
  * `//evil.com` 은 프로토콜 상대 URL 이라 `/` 로 시작해도 외부다.
  */
 export function safeNextPath(raw: string | null | undefined): string {
-  if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return SHOP_PROTECTED_PREFIX
+  if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return '/shop'
   return raw
 }
 
