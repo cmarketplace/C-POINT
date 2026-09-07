@@ -186,6 +186,8 @@ function remoteImage(imageUrl: string | null | undefined): string | null {
 function pickImage(categoryName: string | null | undefined, name: string): string {
   const hay = `${categoryName ?? ""} ${name ?? ""}`.toLowerCase();
 
+  // 선장품은 카테고리로만 가른다 — 품명(치약·세제·휴지…)으로 걸면 아래 규칙에 흩어진다.
+  if (/선장품/.test(categoryName ?? "")) return PRODUCT_IMAGES.seonjang;
   if (/시약|reagent|용액|solution|acid|alcohol|산\b|수산화/.test(hay)) return PRODUCT_IMAGES.reagent;
   if (/초자|유리|glass|비커|플라스크|flask|beaker|메스/.test(hay)) return PRODUCT_IMAGES.glass;
   if (/세제|세정|린스|표백|살균|소독/.test(hay)) return PRODUCT_IMAGES.color;
