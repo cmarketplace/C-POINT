@@ -1,12 +1,14 @@
 /**
- * 브라우저에서 주문·취소를 낸다 — `/api/shop/orders` 로만 간다.
+ * 브라우저에서 주문·취소·견적 발급을 낸다 — `/api/shop/*` 로만 간다.
  *
  * 원장을 직접 부르지 않는 이유는 신원이다. 「누가」는 서버 세션이 정하고, 세모 연동
  * 후에는 파트너 키도 서버에만 있다.
  */
 
-import type { Product } from '@/components/Shop/product.data'
-import type { OrderShipTo, StorefrontOrder } from '@/lib/order-types'
+import type { AssignedLine } from '@/lib/cart-combination'
+import type { CombinationMode } from '@/lib/cart-combination'
+import type { OrderRoute, OrderShipTo, PaymentMethod, StorefrontOrder } from '@/lib/order-types'
+import type { StorefrontQuote } from '@/lib/quote-types'
 
 export interface PlacedOrder {
   orderNo: string
@@ -26,15 +28,29 @@ export function newOrderKey(): string {
   return `cart-${Date.now().toString(36)}-${random}`
 }
 
-/** 장바구니 줄 → 주문 줄. 스텁 단계에서는 단가 스냅샷도 함께 간다(서버 라우트 주석 참고). */
-export function toOrderLine(line: { product: Product; quantity: number }) {
+export interface OrderLineInput {
+  itemId: string
+  name: string
+  spec: string | null
+  unit: string | null
+  quantity: number
+  unitPrice: number
+  offerId: string | null
+  supplierName: string | null
+}
+
+/** 조합이 정한 줄 → 주문 줄. 스텁 단계에서는 단가 스냅샷도 함께 간다(서버 라우트 주석 참고). */
+export function toOrderLine(line: AssignedLine): OrderLineInput {
   return {
     itemId: line.product.id,
     name: line.product.name,
     spec: [line.product.spec1, line.product.spec2].filter(Boolean).join(' ') || null,
     unit: line.product.unit || null,
     quantity: line.quantity,
-    unitPrice: line.product.basePrice,
+    unitPrice: line.unitPrice,
+    // 목록에서 담겨 오퍼가 없던 줄은 `base:` 가짜 오퍼다 — 서버에 그 id 를 보내지 않는다.
+    offerId: line.offer.offerId.startsWith('base:') ? null : line.offer.offerId,
+    supplierName: line.offer.supplierName,
   }
 }
 
@@ -46,10 +62,18 @@ export class LoginRequiredError extends Error {
   }
 }
 
+async function readPayload<T>(response: Response): Promise<T | null> {
+  return (await response.json().catch(() => null)) as T | null
+}
+
 export async function placeOrder(input: {
   shipTo: OrderShipTo
-  items: ReturnType<typeof toOrderLine>[]
+  items: OrderLineInput[]
   clientOrderKey: string
+  route: OrderRoute
+  paymentMethod: PaymentMethod | null
+  quoteNo: string | null
+  shipping: number
 }): Promise<PlacedOrder> {
   const response = await fetch('/api/shop/orders', {
     method: 'POST',
@@ -59,10 +83,7 @@ export async function placeOrder(input: {
 
   if (response.status === 401) throw new LoginRequiredError()
 
-  const payload = (await response.json().catch(() => null)) as {
-    order?: PlacedOrder
-    message?: string
-  } | null
+  const payload = await readPayload<{ order?: PlacedOrder; message?: string }>(response)
 
   if (!response.ok || !payload?.order) {
     // 서버가 준 문구를 그대로 보여 준다 — 배송지 형식 오류처럼 담당자가 고칠 수 있는
@@ -78,16 +99,40 @@ export async function cancelOrder(orderNo: string): Promise<StorefrontOrder> {
     method: 'POST',
   })
 
-  const payload = (await response.json().catch(() => null)) as {
-    order?: StorefrontOrder
-    message?: string
-  } | null
+  const payload = await readPayload<{ order?: StorefrontOrder; message?: string }>(response)
 
   if (!response.ok || !payload?.order) {
     throw new Error(payload?.message ?? '주문을 취소하지 못했습니다.')
   }
 
   return payload.order
+}
+
+/* ── 견적서 ──────────────────────────────────────────────────────── */
+
+export type QuoteRequest =
+  | {
+      kind: 'CART'
+      route: OrderRoute | null
+      mode: CombinationMode
+      items: { itemId: string; quantity: number; offerId: string | null }[]
+    }
+  | { kind: 'SUBSCRIPTION'; planKey: string; people: number; frequencyIndex: number }
+
+export async function requestQuote(input: QuoteRequest): Promise<StorefrontQuote> {
+  const response = await fetch('/api/shop/quotes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+
+  if (response.status === 401) throw new LoginRequiredError()
+
+  const payload = await readPayload<{ quote?: StorefrontQuote; message?: string }>(response)
+  if (!response.ok || !payload?.quote) {
+    throw new Error(payload?.message ?? '견적서를 발급하지 못했습니다.')
+  }
+  return payload.quote
 }
 
 /* ── 배송지 기억 — cart.ts 와 같은 외부 스토어 ───────────────────────── */
@@ -155,4 +200,52 @@ export function setShipTo(next: OrderShipTo): void {
     // 저장에 실패해도 화면 상태는 유지한다 — 주문은 그대로 진행된다.
   }
   shipToListeners.forEach(notify => notify())
+}
+
+/* ── 활성 견적서 — 장바구니에서 받아 결제 화면까지 들고 간다 ───────────── */
+
+const QUOTE_KEY = 'cpoint.activeQuote'
+
+let quoteSnapshot: StorefrontQuote | null = null
+let quoteLoaded = false
+
+const quoteListeners = new Set<() => void>()
+
+function readQuoteStorage(): StorefrontQuote | null {
+  try {
+    const raw = window.localStorage.getItem(QUOTE_KEY)
+    const parsed = raw ? (JSON.parse(raw) as StorefrontQuote) : null
+    return parsed && typeof parsed.quoteNo === 'string' ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+export function subscribeActiveQuote(listener: () => void): () => void {
+  quoteListeners.add(listener)
+  return () => quoteListeners.delete(listener)
+}
+
+export function getActiveQuoteSnapshot(): StorefrontQuote | null {
+  if (!quoteLoaded) {
+    quoteSnapshot = readQuoteStorage()
+    quoteLoaded = true
+  }
+  return quoteSnapshot
+}
+
+export function getActiveQuoteServerSnapshot(): StorefrontQuote | null {
+  return null
+}
+
+export function setActiveQuote(quote: StorefrontQuote | null): void {
+  quoteSnapshot = quote
+  quoteLoaded = true
+  try {
+    if (quote) window.localStorage.setItem(QUOTE_KEY, JSON.stringify(quote))
+    else window.localStorage.removeItem(QUOTE_KEY)
+  } catch {
+    // 저장 실패는 화면 상태에 영향이 없다.
+  }
+  quoteListeners.forEach(notify => notify())
 }

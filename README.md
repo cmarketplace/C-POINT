@@ -1,7 +1,8 @@
-# C-POINT
+# 씨마켓몰 (저장소명 C-POINT)
 
-씨마켓 C-POINT 쇼핑몰. 상품은 **세모(SEMO) 큐레이션 피드**에서 온다 —
+씨마켓몰 쇼핑몰. 상품은 **세모(SEMO) 큐레이션 피드**에서 온다 —
 세모 마스터가 「이 쇼핑몰 × 품목 × 공급사」로 승인한 것만 내려온다.
+2026-08-30 결정으로 이름이 «씨마켓몰» 이다(포인트 미사용). 저장소·디렉터리는 c-point 그대로.
 
 KCL MRO → FITI MRO 로 이어진 몰의 세 번째다. 화면 구조와 데이터 경로는 같고,
 기관 종속값만 `src/config/tenant.ts` 와 `globals.css` 의 브랜드 색으로 갈라진다.
@@ -19,10 +20,48 @@ npm run dev
 | 경로 | 화면 |
 | --- | --- |
 | `/` | 랜딩 — 히어로 · 지표 · 근거 3칸 · AS-IS/TO-BE · 마무리 CTA |
-| `/shop` | 상품 목록 — 대분류/소분류·검색·정렬·찜·더 보기 |
-| `/shop/[productId]` | 상품 상세 — 규격표·상품 설명·배송 안내·익명 단가 비교·추천 |
-| `/shop/cart` | 장바구니 — 선택·수량·합계·추천 캐러셀 |
+| `/shop` | 몰 홈 — 정기구독(인원수→월 예산·구독 견적서) · 시즌 D-day · MD 큐레이션 · 우리 기관 재주문·예산 |
+| `/shop/products` | 상품 목록 — 대분류/소분류·검색·정렬·찜·더 보기 |
+| `/shop/[productId]` | 상품 상세 — **가격 밴드**(공급사 단가 점 + 낙찰가 중앙값 선 + 등급) · 수량 구간 단가 · 공급사별 표(실명은 로그인 후) · 관심 가격 |
+| `/shop/cart` | 장바구니 — **조합 3모드**(최저가 조합 / 업체 최소화 / 직접 고르기) · 업체·배송·계산서 수 · 견적서 발급(7일 잠금) |
+| `/shop/checkout` | 주문 방법 — **씨마켓 안전결제 / 공급사 직접 구매** · 비교표 · 결제수단 · 배송지 |
+| `/shop/order-complete` | 영수증 — 경로·계약 상대·계산서 수·견적번호 |
+| `/shop/orders` | 주문 내역 |
 | `/login` | 로그인 — 「씨마켓 계정으로 로그인」 버튼 하나 |
+
+## 2026-09-07 — 가격 밴드 · 조합 · 결제 2경로 (이 브랜치)
+
+설계 목업: https://claude.ai/code/artifact/44397ae1-a6b1-4e90-be12-7b3f13d1ccba
+
+**결정 사항**
+- 공급사별 단가를 **로그인한 손님에게 실명으로** 보여 준다(비로그인은 밴드·«N곳» 만).
+  가림은 서버(`src/lib/catalog.ts` `maskForViewer`)가 한다.
+- **씨마켓 안전결제** = 씨마켓이 대금을 받아 공급사에 정산. 계약 상대 1곳·계산서 1장·카드 가능.
+  엔씨하이는 이 거래에서 돈을 받지 않고 **플랫폼 수수료만 씨마켓에 별도 청구**한다.
+- **공급사 직접 구매** = 세모 직거래 모델. 계약·계산서·결제가 공급사 수만큼.
+- 두 경로의 **가격 정책은 미정** — 지금은 같은 총액이고 결제 화면에 «경로별 가격 정책 결정 필요» 표시.
+
+**세모가 아직 안 주는 값 (전부 선택 필드, 없으면 화면이 그 칸을 안 그린다)**
+
+| 값 | 어디에 쓰나 | 세모 피드 필드 |
+| --- | --- | --- |
+| 공급사 실명·id | 표·직접 구매·업체 최소화 | `offers[].supplierId/supplierName` |
+| 수량 구간 단가 | 슬라이더에 따라 1위 업체가 바뀜 | `offers[].tiers[{minQuantity,price}]` |
+| 6개월 추이 | 스파크라인 | `offers[].trend[]` |
+| 신뢰·낙찰 건수·리드타임·직접구매 가능·배송비 | 대표 오퍼 근거·경로 판정·배송비 | `offers[].trustScore/recentAwards/leadDays/directPurchase/shippingFee/freeShippingOver` |
+| 낙찰가 중앙값 | 밴드 기준선·등급 A/B/C | `items[].benchmark{medianPrice,sampleCount,windowDays,asOf}` |
+| MD 순위·주문 수 | 큐레이션 탭 | `items[].mdRank/popularity` |
+
+**세모 주문 API 확장(미착수)** — `route`(SAFE/DIRECT)·`paymentMethod`·`quoteNo`·`items[].offerId`.
+세모가 받기 전에는 `SEMO_ORDER_EXT` 를 끄고 둔다(켜면 whitelist 400). 그동안 몰의 경로 선택은
+세모에 전달되지 않고 로그에만 남는다(`src/lib/semo-orders.ts`).
+
+**몰 안에만 있는 것** — 견적서 원장(`src/lib/quotes.ts`, `var/quotes-stub.json`)·관심 가격·
+월 예산(브라우저 저장)·구독 산식(`src/config/subscriptions.ts`)·시즌 캘린더(`src/config/seasons.ts`).
+예시 카탈로그는 `src/lib/catalog-stub.ts`(세모 키 없을 때 자동).
+
+**금액 정본** `src/lib/cart-amounts.ts`(배송비 포함, 부가세는 합계에서 1회) ·
+**단가 정본** `src/lib/offer-pricing.ts`(구간 단가·순위·등급) · **조합** `src/lib/cart-combination.ts`.
 
 ## 구조
 

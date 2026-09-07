@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { ChevronLeft, ReceiptText, ShoppingCart } from 'lucide-react'
 
 import { TENANT } from '@/config/tenant'
@@ -15,9 +15,19 @@ interface ShopNavProps {
   showBack?: boolean
 }
 
+/** 몰 안의 두 번째 줄 — 홈·전체 상품·정기구독·시즌·주문 내역. */
+const SHOP_LINKS: { href: string; label: string; match: (pathname: string) => boolean }[] = [
+  { href: '/shop', label: '홈', match: pathname => pathname === '/shop' },
+  { href: '/shop/products', label: '전체 상품', match: pathname => pathname.startsWith('/shop/products') },
+  { href: '/shop#subscribe', label: '정기구독', match: () => false },
+  { href: '/shop#season', label: '시즌', match: () => false },
+  { href: '/shop/orders', label: '주문 내역', match: pathname => pathname.startsWith('/shop/orders') },
+]
+
 export default function ShopNav({ showBack = false }: ShopNavProps) {
   const { cartCount } = useShop()
   const router = useRouter()
+  const pathname = usePathname()
 
   // 공유 링크나 검색 결과로 상세에 바로 들어오면 되돌아갈 앱 내 기록이 없다.
   // 그대로 back() 하면 사이트 밖으로 튕기므로, 그때는 상품 목록으로 보낸다.
@@ -102,8 +112,28 @@ export default function ShopNav({ showBack = false }: ShopNavProps) {
           <ShopUserMenu />
         </div>
       </nav>
-      <div className="container-shop" aria-hidden="true">
-        <div className="h-px bg-bg" />
+      <div className="container-shop">
+        <nav aria-label="쇼핑몰 메뉴" className="flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {SHOP_LINKS.map(link => {
+            const active = link.match(pathname)
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                aria-current={active ? 'page' : undefined}
+                className={`relative shrink-0 px-3 py-2.5 text-sm transition-colors ${
+                  active ? 'text-text font-semibold' : 'text-muted hover:text-text'
+                }`}
+              >
+                {link.label}
+                {active && (
+                  <span aria-hidden="true" className="bg-primary absolute inset-x-3 bottom-0 h-[2px] rounded-full" />
+                )}
+              </Link>
+            )
+          })}
+        </nav>
+        <div className="h-px bg-bg" aria-hidden="true" />
       </div>
     </header>
   )

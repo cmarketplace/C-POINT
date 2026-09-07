@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { fetchStorefrontCategories, SemoFeedError } from "@/lib/semo-feed";
+import { fetchStorefrontCategories, SemoFeedError } from "@/lib/catalog";
 
 /**
  * 카테고리 인덱스 창구.

@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server'
 
 import { toErrorResponse } from '@/lib/api-errors'
-import { createOrder, listOrders } from '@/lib/orders'
+import { createOrder, listOrders, OrderError } from '@/lib/orders'
 import { getShopMember } from '@/lib/shop-member'
-import type { OrderShipTo } from '@/lib/order-types'
+import type { OrderRoute, OrderShipTo, PaymentMethod } from '@/lib/order-types'
 import type { StubOrderLine } from '@/lib/postpaid-mall-stub'
+import { isQuoteValid } from '@/lib/quote-types'
+import { getQuote } from '@/lib/quotes'
 
 /**
  * 몰 주문 — 브라우저와 원장 사이의 유일한 통로.
@@ -13,8 +15,11 @@ import type { StubOrderLine } from '@/lib/postpaid-mall-stub'
  *      후불 계약의 당사자가 필요해서 익명일 수 없다(로그인 없으면 401).
  *   2) **배송지** — 이 몰은 모두 개방이라 고정 사업장 목록이 없다. 주문자가 적은
  *      주소를 받되 서버가 모양을 검증한다.
- *   3) **금액** — 스텁 단계에서는 화면 스냅샷 단가를 받아 서버가 합산하고,
+ *   3) **금액** — 스텁 단계에서는 화면 스냅샷 단가·배송비를 받아 서버가 합산하고,
  *      세모 연동 후에는 단가 자체를 받지 않는다(카탈로그가 재확정).
+ *   4) **경로** — 씨마켓 안전결제(SAFE) / 공급사 직접 구매(DIRECT). 결제 수단은
+ *      안전결제에만 있다(직접 구매는 공급사 계좌 후불).
+ *   5) **견적서** — 견적번호가 오면 내 견적서인지·유효기간 안인지 확인한다.
  */
 
 /** 한 번에 담을 수 있는 줄 수. 세모 주문 DTO 상한과 같은 값이다. */
@@ -24,6 +29,10 @@ interface OrderRequestBody {
   shipTo?: unknown
   items?: unknown
   clientOrderKey?: unknown
+  route?: unknown
+  paymentMethod?: unknown
+  quoteNo?: unknown
+  shipping?: unknown
 }
 
 /** 본문의 품목 배열을 신뢰할 수 있는 모양으로 좁힌다. 한 줄이라도 깨졌으면 전체 거절. */
@@ -39,6 +48,8 @@ function parseLines(raw: unknown): StubOrderLine[] | null {
       unit?: unknown
       quantity?: unknown
       unitPrice?: unknown
+      offerId?: unknown
+      supplierName?: unknown
     }
 
     const itemId = typeof line.itemId === 'string' ? line.itemId.trim() : ''
@@ -57,6 +68,9 @@ function parseLines(raw: unknown): StubOrderLine[] | null {
       unit: typeof line.unit === 'string' && line.unit ? line.unit : null,
       quantity,
       unitPrice,
+      offerId: typeof line.offerId === 'string' && line.offerId ? line.offerId : null,
+      supplierName:
+        typeof line.supplierName === 'string' && line.supplierName ? line.supplierName : null,
     })
   }
   return lines
@@ -84,6 +98,15 @@ function parseShipTo(raw: unknown): OrderShipTo | string {
   if (tel && !/^[\d\-+() ]{7,20}$/.test(tel)) return '연락처 형식을 확인해 주세요.'
 
   return { name, zip, address, tel: tel || null }
+}
+
+function parseRoute(raw: unknown): OrderRoute {
+  return raw === 'DIRECT' ? 'DIRECT' : 'SAFE'
+}
+
+function parsePaymentMethod(raw: unknown, route: OrderRoute): PaymentMethod | null {
+  if (route !== 'SAFE') return null
+  return raw === 'CARD' ? 'CARD' : 'TAX_INVOICE'
 }
 
 export async function POST(request: Request) {
@@ -115,6 +138,30 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: shipTo }, { status: 400 })
   }
 
+  const route = parseRoute(body.route)
+  const paymentMethod = parsePaymentMethod(body.paymentMethod, route)
+  const shipping = Math.max(0, Math.round(Number(body.shipping) || 0))
+
+  // 견적번호 — 내 것이어야 하고, 유효기간 안이어야 한다. 아니면 주문을 세우지 않는다:
+  // 만료된 견적 단가로 품의가 났는데 주문이 다른 값으로 서면 담당자가 설명할 길이 없다.
+  const quoteNo = typeof body.quoteNo === 'string' && body.quoteNo ? body.quoteNo.trim() : null
+  if (quoteNo) {
+    try {
+      const quote = getQuote(member.memberId, quoteNo)
+      if (!isQuoteValid(quote)) {
+        return NextResponse.json(
+          { message: '견적서 유효기간이 지났습니다. 장바구니에서 견적서를 다시 발급해 주세요.' },
+          { status: 409 },
+        )
+      }
+    } catch (error) {
+      if (error instanceof OrderError && error.status === 404) {
+        return NextResponse.json({ message: '견적서를 찾을 수 없습니다.' }, { status: 400 })
+      }
+      throw error
+    }
+  }
+
   try {
     const order = await createOrder({
       memberId: member.memberId,
@@ -122,6 +169,10 @@ export async function POST(request: Request) {
       lines,
       clientOrderKey:
         typeof body.clientOrderKey === 'string' && body.clientOrderKey ? body.clientOrderKey : null,
+      route,
+      paymentMethod,
+      quoteNo,
+      shipping,
     })
 
     return NextResponse.json({ order }, { status: 201 })

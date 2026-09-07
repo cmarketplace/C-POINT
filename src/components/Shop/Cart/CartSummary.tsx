@@ -1,237 +1,220 @@
 'use client'
 
-import { useRef, useState, useSyncExternalStore } from 'react'
+import { useState, useSyncExternalStore } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { FileText } from 'lucide-react'
 
-import type { Product } from '@/components/Shop/product.data'
 import { calculateCartAmounts } from '@/lib/cart-amounts'
-import type { OrderShipTo } from '@/lib/order-types'
+import type { CombinationInput, CombinationMode, CombinationResult } from '@/lib/cart-combination'
 import {
   LoginRequiredError,
-  getShipToServerSnapshot,
-  getShipToSnapshot,
-  newOrderKey,
-  placeOrder,
-  setShipTo,
-  subscribeShipTo,
-  toOrderLine,
+  getActiveQuoteServerSnapshot,
+  getActiveQuoteSnapshot,
+  requestQuote,
+  setActiveQuote,
+  subscribeActiveQuote,
 } from '@/lib/place-order'
+import { isQuoteValid } from '@/lib/quote-types'
 
 interface CartSummaryProps {
-  /** 체크된 항목만 집계하고 전송한다. 장바구니 전체가 아니다. */
-  selectedItems: { product: Product; quantity: number }[]
+  result: CombinationResult
+  inputs: CombinationInput[]
+  mode: CombinationMode
 }
 
-/**
- * 장바구니 → **후불 주문**.
- *
- * 이 몰은 주문 시점에 돈이 오가지 않는다 — 공급사는 저장 단가 최저 조합으로
- * 자동매칭되고, 결제(현금/카드)는 **배송이 다 끝난 뒤**다. 그래서 이 화면이 분명히
- * 해야 하는 것도 그 한 가지다: 지금 내는 돈이 없고, 이 금액이 나중에 청구된다는 것.
- *
- * 배송지는 주문자가 직접 적는다 — 모두 개방 몰이라 고정 사업장 목록이 없다.
- * 마지막 배송지를 기억해(localStorage) 두 번째 주문부터는 확인만 하면 된다.
- *
- * 금액은 `cart-amounts.ts` 만 쓴다(부가세 포함 총액 = 청구 예정액). 표시가는
- * 예정가가 아니라 **확정가**다 — 표시가가 곧 청구액이다.
- */
-export default function CartSummary({ selectedItems }: CartSummaryProps) {
-  const router = useRouter()
+const won = (n: number) => n.toLocaleString('ko-KR')
 
-  // 마지막 배송지 — 외부 스토어(place-order.ts). 입력이 곧 저장이라 «기억» 버튼이 없다.
-  const shipTo = useSyncExternalStore(subscribeShipTo, getShipToSnapshot, getShipToServerSnapshot)
-  const [isPlacing, setIsPlacing] = useState(false)
-  const [orderError, setOrderError] = useState<string | null>(null)
+const formatDate = (iso: string) =>
+  new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric', timeZone: 'Asia/Seoul' }).format(
+    new Date(iso),
+  )
+
+/**
+ * 장바구니 요약 — 금액 · 업체/배송/계산서 수 · 견적서 · 결제 화면으로.
+ *
+ * 주문은 여기서 내지 않는다. «어떻게 살 것인가»(안전결제 / 직접 구매)를 고르는 화면이
+ * 따로 있고(`/shop/checkout`), 배송지도 거기서 적는다. 여기가 하는 일은 «얼마인가» 와
+ * «견적서 먼저 받을 것인가» 둘이다.
+ *
+ * 금액은 `cart-amounts.ts` 만 쓴다(배송비 포함 총액 = 청구 예정액).
+ */
+export default function CartSummary({ result, inputs, mode }: CartSummaryProps) {
+  const activeQuote = useSyncExternalStore(
+    subscribeActiveQuote,
+    getActiveQuoteSnapshot,
+    getActiveQuoteServerSnapshot,
+  )
+  const [isQuoting, setIsQuoting] = useState(false)
+  const [quoteError, setQuoteError] = useState<string | null>(null)
   const [needsLogin, setNeedsLogin] = useState(false)
 
-  /**
-   * 재시도 키 — 실패해서 다시 누를 때 **같은 키**를 보내야 주문이 한 건만 생긴다.
-   * 성공하면 비워, 다음 장바구니는 새 키를 받는다.
-   */
-  const orderKeyRef = useRef<string | null>(null)
+  const count = result.lines.reduce((sum, line) => sum + line.quantity, 0)
+  const amounts = calculateCartAmounts(
+    result.lines.map(line => ({ unitPrice: line.unitPrice, quantity: line.quantity })),
+    { shipping: result.shipping },
+  )
+  const hasSelection = result.lines.length > 0
+  const n = result.supplierCount
+  const quoteStillValid = activeQuote ? isQuoteValid(activeQuote) : false
 
-  const selectedCount = selectedItems.reduce((count, item) => count + item.quantity, 0)
-  const amounts = calculateCartAmounts(selectedItems)
-  const hasSelection = selectedItems.length > 0
-
-  const setField = (field: keyof OrderShipTo) => (value: string) =>
-    setShipTo({ ...shipTo, [field]: field === 'tel' ? value || null : value })
-
-  const handleOrder = async () => {
-    if (!hasSelection || isPlacing) return
-
-    setOrderError(null)
+  const handleQuote = async () => {
+    if (!hasSelection || isQuoting) return
+    setQuoteError(null)
     setNeedsLogin(false)
-    setIsPlacing(true)
-
-    orderKeyRef.current ??= newOrderKey()
-
+    setIsQuoting(true)
     try {
-      const order = await placeOrder({
-        shipTo,
-        items: selectedItems.map(toOrderLine),
-        clientOrderKey: orderKeyRef.current,
+      const quote = await requestQuote({
+        kind: 'CART',
+        route: null,
+        mode,
+        items: inputs.map(input => ({
+          itemId: input.product.id,
+          quantity: input.quantity,
+          offerId: input.offerId,
+        })),
       })
-
-      orderKeyRef.current = null
-      router.push(`/shop/order-complete?orderNo=${encodeURIComponent(order.orderNo)}`)
+      setActiveQuote(quote)
     } catch (error) {
-      // 로딩을 여기서만 내린다. 성공 경로는 화면이 통째로 바뀌므로 내리지 않는다 —
-      // 내리면 이동 직전에 버튼이 잠깐 되살아나 두 번 눌린다.
-      setIsPlacing(false)
-      if (error instanceof LoginRequiredError) {
-        setNeedsLogin(true)
-        return
-      }
-      setOrderError(error instanceof Error ? error.message : '주문을 등록하지 못했습니다.')
+      if (error instanceof LoginRequiredError) setNeedsLogin(true)
+      else setQuoteError(error instanceof Error ? error.message : '견적서를 발급하지 못했습니다.')
+    } finally {
+      setIsQuoting(false)
     }
   }
 
-  const inputClass =
-    'text-text placeholder:text-muted w-full rounded-xl bg-bg px-3 py-2.5 text-sm ' +
-    'focus-visible:outline-primary focus-visible:outline-2'
-
   return (
     <aside className="rounded-2xl bg-light-soft p-6">
-      <div className="space-y-4 rounded-xl bg-white p-4">
-        <div className="flex items-center justify-between text-sm">
+      <div className="space-y-3 rounded-xl bg-white p-4 text-sm">
+        <div className="flex items-center justify-between">
           <span className="text-muted">선택 상품</span>
           <span className="text-text font-medium">
-            {selectedItems.length}종 / {selectedCount}개
+            {result.lines.length}종 / {count}개
           </span>
         </div>
 
-        {selectedItems.length > 0 && (
-          <div className="border-y border-dashed border-bg py-1">
-            <p className="py-2 text-sm font-semibold text-primary">상품별 금액</p>
-
-            <ol className="divide-y divide-dashed divide-bg">
-              {selectedItems.map(({ product, quantity }, index) => {
-                const itemTotal = product.basePrice * quantity
-
-                return (
-                  <li
-                    key={product.id}
-                    className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 py-3 text-sm"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-text">
-                        <span className="mr-1.5 text-muted">{index + 1}.</span>
-                        {product.name}
-                      </p>
-                      <p className="mt-1 text-muted">
-                        {product.basePrice.toLocaleString()}원 × {quantity}개
-                      </p>
-                    </div>
-                    <strong className="self-end font-semibold text-text">
-                      {itemTotal.toLocaleString()}원
-                    </strong>
-                  </li>
-                )
-              })}
-            </ol>
+        {/* 서류 수 — 절감액과 같은 무게로 */}
+        {hasSelection && (
+          <div className="border-bg grid grid-cols-3 gap-2 border-y border-dashed py-3 text-center">
+            {[
+              ['업체', `${n}곳`],
+              ['배송', `${n}건`],
+              ['계산서', n > 1 ? `${n}장 · 안전결제 1장` : '1장'],
+            ].map(([label, value]) => (
+              <div key={label}>
+                <p className="text-muted text-[11px]">{label}</p>
+                <p className="text-text mt-0.5 text-xs font-semibold">{value}</p>
+              </div>
+            ))}
           </div>
         )}
 
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-muted">상품 금액</span>
-          <span className="text-text font-medium">{amounts.supply.toLocaleString()}원</span>
-        </div>
+        {/* 업체별 소계 */}
+        {result.groups.length > 0 && (
+          <ul className="space-y-1.5">
+            {result.groups.map(group => (
+              <li key={group.key} className="flex items-center justify-between gap-3 text-xs">
+                <span className="text-text inline-flex min-w-0 items-center gap-1.5">
+                  <span aria-hidden="true" className="bg-primary h-1.5 w-1.5 shrink-0 rounded-full" />
+                  <span className="truncate">
+                    {group.label} · {group.lineCount}품목
+                  </span>
+                </span>
+                <span className="text-muted shrink-0 tabular-nums">
+                  {won(group.supply)}원{group.shippingFee > 0 ? ` +배송 ${won(group.shippingFee)}` : ''}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
 
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-muted">부가세</span>
-          <span className="text-text font-medium">{amounts.vat.toLocaleString()}원</span>
+        <div className="border-bg space-y-2 border-t border-dashed pt-3">
+          <div className="flex items-center justify-between">
+            <span className="text-muted">상품 금액</span>
+            <span className="text-text font-medium tabular-nums">{won(amounts.supply)}원</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-muted">배송비 ({n}건)</span>
+            <span className="text-text font-medium tabular-nums">
+              {amounts.shipping > 0 ? `${won(amounts.shipping)}원` : '무료'}
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-muted">부가세 10%</span>
+            <span className="text-text font-medium tabular-nums">{won(amounts.vat)}원</span>
+          </div>
         </div>
-
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-muted">배송비</span>
-          <span className="text-text font-medium">무료</span>
-        </div>
-      </div>
-
-      {/* 배송지 — 모두 개방 몰이라 주문자가 직접 적는다. 마지막 값이 미리 채워진다. */}
-      <div className="mt-4 space-y-2.5 rounded-xl bg-white p-4">
-        <span className="text-muted block text-sm">배송지</span>
-
-        <input
-          value={shipTo.name}
-          onChange={event => setField('name')(event.target.value)}
-          placeholder="받는 곳 (기관·부서명)"
-          autoComplete="organization"
-          className={inputClass}
-        />
-        <div className="flex gap-2.5">
-          <input
-            value={shipTo.zip}
-            onChange={event => setField('zip')(event.target.value.replace(/\D/g, '').slice(0, 5))}
-            placeholder="우편번호 5자리"
-            inputMode="numeric"
-            autoComplete="postal-code"
-            className={`${inputClass} w-36`}
-          />
-          <input
-            value={shipTo.tel ?? ''}
-            onChange={event => setField('tel')(event.target.value)}
-            placeholder="연락처 (선택)"
-            inputMode="tel"
-            autoComplete="tel"
-            className={inputClass}
-          />
-        </div>
-        <input
-          value={shipTo.address}
-          onChange={event => setField('address')(event.target.value)}
-          placeholder="주소"
-          autoComplete="street-address"
-          className={inputClass}
-        />
       </div>
 
       <div className="mt-6 flex items-end justify-between">
         <span className="text-text font-semibold">청구 예정 금액</span>
-
-        <strong className="text-primary text-2xl font-semibold">
-          {amounts.total.toLocaleString()}원
-        </strong>
+        <strong className="text-primary text-2xl font-semibold tabular-nums">{won(amounts.total)}원</strong>
       </div>
-
-      {/* 후불의 핵심 안내 — 「지금 결제창이 안 뜨는 게 정상」임을 여기서 못박는다 */}
       <p className="text-muted mt-1 text-right text-xs leading-5">
-        부가세 포함 · <strong className="font-semibold">지금 결제하지 않습니다</strong> —
-        배송완료 후 현금/카드로 결제합니다
+        부가세 포함 · <strong className="font-semibold">지금 결제하지 않습니다</strong>
       </p>
+
+      {/* 견적서 — 결재용 종이를 먼저 */}
+      {activeQuote && (
+        <div
+          className={`mt-4 rounded-xl px-4 py-3 text-xs leading-5 ${
+            quoteStillValid ? 'bg-highlight-soft text-highlight-strong' : 'bg-bg text-muted'
+          }`}
+        >
+          <p className="flex items-center gap-1.5 font-semibold">
+            <FileText size={14} />
+            견적서 {activeQuote.quoteNo}
+          </p>
+          <p className="mt-0.5">
+            {quoteStillValid
+              ? `${formatDate(activeQuote.validUntil)}까지 총액 ${won(activeQuote.total)}원 잠금 · 결재 후 이 번호로 주문`
+              : '유효기간이 지났습니다. 다시 발급해 주세요.'}
+          </p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {['견적서', '내부 결재', '견적번호로 주문'].map((step, index) => (
+              <span key={step} className="rounded-full bg-white px-2 py-0.5 text-[11px]">
+                {index + 1}. {step}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {needsLogin && (
         <p className="mt-4 rounded-xl bg-highlight-soft px-4 py-3 text-sm leading-6 text-highlight-strong">
-          주문하려면 씨마켓 계정으로 로그인해 주세요.{' '}
+          견적서에는 기관·담당자가 실려야 합니다.{' '}
           <Link href="/login?next=/shop/cart" className="font-semibold underline underline-offset-2">
-            로그인하러 가기
+            씨마켓 계정으로 로그인
           </Link>
         </p>
       )}
 
-      {orderError && (
-        <p
-          role="alert"
-          className="mt-4 rounded-xl bg-[#FDECEC] px-4 py-3 text-sm leading-5 text-[#B3261E]"
-        >
-          {orderError}
+      {quoteError && (
+        <p role="alert" className="mt-4 rounded-xl bg-[#FDECEC] px-4 py-3 text-sm leading-5 text-[#B3261E]">
+          {quoteError}
         </p>
       )}
 
-      <button
-        type="button"
-        onClick={handleOrder}
-        disabled={!hasSelection || isPlacing}
-        className="bg-primary hover:bg-primary-dark mt-6 w-full cursor-pointer rounded-full px-6 py-4 text-sm font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
-      >
-        {!hasSelection
-          ? '주문할 상품을 선택하세요'
-          : isPlacing
-            ? '주문을 접수하는 중…'
-            : '후불로 주문하기'}
-      </button>
+      <div className="mt-6 flex flex-col gap-2.5">
+        <button
+          type="button"
+          onClick={handleQuote}
+          disabled={!hasSelection || isQuoting}
+          className="text-text hover:bg-bg w-full cursor-pointer rounded-full border border-border bg-white px-6 py-3.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {isQuoting ? '견적서를 만드는 중…' : activeQuote && quoteStillValid ? '견적서 다시 발급' : '견적서 발급 · 가격 7일 잠금'}
+        </button>
+        <Link
+          href="/shop/checkout"
+          aria-disabled={!hasSelection}
+          className={`w-full rounded-full px-6 py-4 text-center text-sm font-semibold transition-all duration-200 ${
+            hasSelection
+              ? 'bg-primary hover:bg-primary-dark text-white hover:-translate-y-0.5'
+              : 'bg-bg text-muted pointer-events-none'
+          }`}
+        >
+          {hasSelection ? '주문 방법 선택으로' : '주문할 상품을 선택하세요'}
+        </Link>
+      </div>
     </aside>
   )
 }

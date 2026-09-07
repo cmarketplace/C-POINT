@@ -12,7 +12,13 @@ import {
   semoGetOrder,
   semoListOrders,
 } from '@/lib/semo-orders'
-import type { OrderListPage, OrderShipTo, StorefrontOrder } from '@/lib/order-types'
+import type {
+  OrderListPage,
+  OrderRoute,
+  OrderShipTo,
+  PaymentMethod,
+  StorefrontOrder,
+} from '@/lib/order-types'
 
 export { PostpaidMallError as OrderError } from '@/lib/postpaid-mall-stub'
 
@@ -32,6 +38,12 @@ export interface CreateOrderInput {
   shipTo: OrderShipTo
   lines: StubOrderLine[]
   clientOrderKey: string | null
+  /** 씨마켓 안전결제 / 공급사 직접 구매 (`order-types.ts`) */
+  route: OrderRoute
+  paymentMethod: PaymentMethod | null
+  quoteNo: string | null
+  /** 배송비 합 — 스텁이 화면 스냅샷을 믿는 값. 세모 모드에서는 보내지 않는다. */
+  shipping: number
 }
 
 export async function createOrder(input: CreateOrderInput): Promise<StorefrontOrder> {
@@ -39,8 +51,15 @@ export async function createOrder(input: CreateOrderInput): Promise<StorefrontOr
     return semoCreateOrder({
       memberId: input.memberId,
       shipTo: input.shipTo,
-      lines: input.lines.map(line => ({ itemId: line.itemId, quantity: line.quantity })),
+      lines: input.lines.map(line => ({
+        itemId: line.itemId,
+        quantity: line.quantity,
+        offerId: line.offerId,
+      })),
       clientOrderKey: input.clientOrderKey,
+      route: input.route,
+      paymentMethod: input.paymentMethod,
+      quoteNo: input.quoteNo,
     })
   }
   return stubPlaceOrder(input)

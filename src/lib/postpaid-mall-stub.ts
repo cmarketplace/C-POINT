@@ -5,7 +5,9 @@ import { calculateCartAmounts } from '@/lib/cart-amounts'
 import {
   CANCELABLE_STATUSES,
   type OrderItem,
+  type OrderRoute,
   type OrderShipTo,
+  type PaymentMethod,
   type StorefrontOrder,
 } from '@/lib/order-types'
 
@@ -13,12 +15,11 @@ import {
  * 후불몰 스텁 주문 원장 — **연동 전의 임시 뼈대다. 정본이 아니다.**
  *
  * 실제 주문의 정본은 세모 주문 파이프라인(`/external/storefronts/{slug}/orders`)이다:
- * 접수 → 저장 단가 최저 조합 자동매칭 → 판매·매입 계약 → 배송 → 결제·계산서 → 정산.
+ * 접수 → 공급사 확정 → 판매·매입 계약 → 배송 → 결제·계산서 → 정산.
  * 그 경로가 열리면 `orders.ts` 의 구현만 갈아 끼우고 이 파일은 지운다.
  *
- * FITI 포인트몰 스텁과 달리 **포인트 원장이 없다** — 후불이라 주문 시점에 돈이 오가지
- * 않고, 결제·계산서는 배송완료 뒤 세모·씨마켓 축(카드결제창·팝빌)의 일이다. 그래서
- * 이 스텁이 지키는 것은 둘뿐이다: 멱등(같은 클릭 = 주문 한 건)과 소유(내 주문만 보인다).
+ * 후불이라 주문 시점에 돈이 오가지 않고, 결제·계산서는 배송완료 뒤 씨마켓 축의 일이다.
+ * 그래서 이 스텁이 지키는 것은 둘뿐이다: 멱등(같은 클릭 = 주문 한 건)과 소유(내 주문만 보인다).
  *
  * 저장: `var/postpaid-mall-stub.json` (.gitignore). 로컬 dev 에서는 재시작에도 남고,
  * 파일을 못 쓰는 환경에서는 메모리로만 돈다 — 그 환경에 갈 때는 이미 실연동이어야 한다.
@@ -47,13 +48,35 @@ const STORE_PATH = path.join(process.cwd(), 'var', 'postpaid-mall-stub.json')
 /** dev 서버의 HMR 이 모듈을 다시 평가해도 상태가 살아남게 globalThis 에 둔다. */
 const globalStore = globalThis as unknown as { __postpaidMallStub?: StubState }
 
+/**
+ * 경로·공급사 축이 생기기 전에 저장된 주문을 지금 모양으로 맞춘다.
+ * 옛 주문은 전부 «안전결제·배송비 0·공급사 1곳» 으로 읽는다 — 그때는 그 축이 없었다.
+ */
+function normalizeOrder(order: StorefrontOrder): StorefrontOrder {
+  return {
+    ...order,
+    route: order.route ?? 'SAFE',
+    paymentMethod: order.paymentMethod ?? null,
+    quoteNo: order.quoteNo ?? null,
+    totalShipping: order.totalShipping ?? 0,
+    supplierCount: order.supplierCount ?? 1,
+    items: order.items.map(item => ({
+      ...item,
+      offerId: item.offerId ?? null,
+      supplierName: item.supplierName ?? null,
+    })),
+  }
+}
+
 function loadState(): StubState {
   if (globalStore.__postpaidMallStub) return globalStore.__postpaidMallStub
 
   let state: StubState = { version: 1, orders: [], orderKeys: {}, orderSeq: 0 }
   try {
     const parsed = JSON.parse(readFileSync(STORE_PATH, 'utf8')) as StubState
-    if (parsed?.version === 1) state = parsed
+    if (parsed?.version === 1) {
+      state = { ...parsed, orders: parsed.orders.map(normalizeOrder) }
+    }
   } catch {
     // 첫 실행(파일 없음)이거나 손으로 고치다 깨진 경우 — 빈 원장에서 다시 시작한다.
   }
@@ -92,6 +115,8 @@ export interface StubOrderLine {
   quantity: number
   /** 공급가액 단가 — 스텁은 화면 스냅샷을 믿는다. 세모 연동 시 카탈로그가 재확정한다. */
   unitPrice: number
+  offerId: string | null
+  supplierName: string | null
 }
 
 export function stubPlaceOrder(input: {
@@ -99,6 +124,10 @@ export function stubPlaceOrder(input: {
   shipTo: OrderShipTo
   lines: StubOrderLine[]
   clientOrderKey: string | null
+  route: OrderRoute
+  paymentMethod: PaymentMethod | null
+  quoteNo: string | null
+  shipping: number
 }): StorefrontOrder {
   const state = loadState()
 
@@ -110,8 +139,13 @@ export function stubPlaceOrder(input: {
   }
 
   const amounts = calculateCartAmounts(
-    input.lines.map(line => ({ product: { basePrice: line.unitPrice }, quantity: line.quantity })),
+    input.lines.map(line => ({ unitPrice: line.unitPrice, quantity: line.quantity })),
+    { shipping: input.shipping },
   )
+
+  const supplierCount = new Set(
+    input.lines.map(line => line.supplierName ?? line.offerId ?? line.itemId),
+  ).size
 
   state.orderSeq += 1
   const orderNo = `CP${kstDateStamp()}-${String(state.orderSeq).padStart(4, '0')}`
@@ -124,19 +158,26 @@ export function stubPlaceOrder(input: {
     unit: line.unit,
     quantity: line.quantity,
     unitPrice: line.unitPrice,
+    offerId: line.offerId,
+    supplierName: line.supplierName,
   }))
 
   const order: StorefrontOrder = {
     orderNo,
     status: 'PLACED',
     memberId: input.memberId,
+    route: input.route,
+    paymentMethod: input.route === 'SAFE' ? input.paymentMethod : null,
+    quoteNo: input.quoteNo,
     shipToName: input.shipTo.name,
     shipToZip: input.shipTo.zip,
     shipToAddress: input.shipTo.address,
     shipToTel: input.shipTo.tel,
     totalSupply: amounts.supply,
+    totalShipping: amounts.shipping,
     totalVat: amounts.vat,
     totalPayable: amounts.total,
+    supplierCount,
     canceledAt: null,
     createdAt: new Date().toISOString(),
     items,

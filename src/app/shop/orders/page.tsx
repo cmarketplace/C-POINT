@@ -4,6 +4,7 @@ import ShopNav from '@/components/Shop/ShopNav'
 import CancelOrderButton from '@/components/Shop/Orders/CancelOrderButton'
 import {
   CANCELABLE_STATUSES,
+  ORDER_ROUTE_LABEL,
   ORDER_STATUS_HINT,
   ORDER_STATUS_LABEL,
   type StorefrontOrder,
@@ -55,7 +56,7 @@ export default async function ShopOrdersPage() {
         <div className="mx-auto w-full max-w-2xl">
           <h1 className="text-text text-2xl font-semibold">주문 내역</h1>
           <p className="text-muted mt-1 text-sm leading-6">
-            주문한 건과 진행 상태입니다. 결제는 배송이 모두 끝난 뒤 현금/카드로 합니다.
+            주문한 건과 진행 상태입니다. 결제는 납품 검수가 끝난 뒤 후불로 합니다.
           </p>
 
           {loadError ? (
@@ -92,7 +93,8 @@ export default async function ShopOrdersPage() {
                           {order.orderNo}
                         </Link>
                         <p className="text-muted mt-0.5 text-xs">
-                          {formatOrderedAt(order.createdAt)}
+                          {formatOrderedAt(order.createdAt)} · {ORDER_ROUTE_LABEL[order.route]}
+                          {order.supplierCount > 1 && ` · 공급사 ${order.supplierCount}곳`}
                         </p>
                       </div>
 

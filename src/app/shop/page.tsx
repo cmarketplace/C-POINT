@@ -1,55 +1,103 @@
-import { Suspense } from "react";
+import Link from 'next/link'
 
-import Shop from "@/components/Shop/Shop";
-import type { Product } from "@/components/Shop/product.data";
-import {
-  fetchStorefrontCategories,
-  fetchStorefrontPage,
-  SemoFeedError,
-  type StorefrontCategoryGroup,
-} from "@/lib/semo-feed";
+import ShopNav from '@/components/Shop/ShopNav'
+import MdCuration from '@/components/Shop/Home/MdCuration'
+import ReorderPanel from '@/components/Shop/Home/ReorderPanel'
+import SeasonStrip from '@/components/Shop/Home/SeasonStrip'
+import SubscriptionHero from '@/components/Shop/Home/SubscriptionHero'
+import { kstToday } from '@/config/seasons'
+import { fetchCuration, fetchStorefrontCategories, isStubCatalog, SemoFeedError, type Curation } from '@/lib/catalog'
+import type { StorefrontOrder } from '@/lib/order-types'
+import { listOrders, OrderError } from '@/lib/orders'
+import { getShopMember } from '@/lib/shop-member'
 
-export default async function ShopPage() {
-  let categories: StorefrontCategoryGroup[] | null = null;
-  let initialItems: Product[] = [];
-  let initialTotal = 0;
-  let loadFailed = false;
+// «누가 보는가»(재주문 판)와 D-day 가 요청마다 다르다.
+export const dynamic = 'force-dynamic'
 
-  // try/catch 는 가져오기만 감싼다. JSX 까지 감싸면 렌더 도중의 오류까지 삼켜서
-  // «피드 장애» 로 잘못 보고한다.
+/**
+ * 몰 홈 — 정기구독 · 시즌 · MD 큐레이션 · 우리 기관 재주문.
+ *
+ * 상품 목록(분류·검색·정렬)은 `/shop/products` 로 옮겼다. 홈은 «무엇을 살지 아직 안 정한
+ * 담당자» 를 위한 화면이고, 목록은 «찾는 게 있는 담당자» 의 화면이다.
+ *
+ * 피드 장애는 섹션 단위로 흡수한다 — 큐레이션이 죽어도 구독 히어로는 떠야 한다.
+ */
+export default async function ShopHomePage() {
+  const today = kstToday()
+  const month = today.slice(0, 7)
+
+  const member = await getShopMember()
+
+  let curation: Curation | null = null
+  let feedFailed = false
+  let categoryCount = 0
   try {
-    // 화면은 «전체» 로 열린다. 그 칸은 분류를 걸지 않은 목록이라 여기서도 필터 없이
-    // 첫 쪽을 그린다 — 조건이 다르면 브라우저가 첫 렌더 직후 다시 불러 같은 화면을 두 번 그린다.
-    const [index, page] = await Promise.all([
-      fetchStorefrontCategories(),
-      fetchStorefrontPage({ limit: 120 }),
-    ]);
-    categories = index;
-    initialItems = page.items;
-    initialTotal = page.total;
+    const [loaded, categories] = await Promise.all([fetchCuration(), fetchStorefrontCategories()])
+    curation = loaded
+    categoryCount = (categories ?? []).reduce((sum, group) => sum + group.itemCount, 0)
   } catch (error) {
-    // 피드가 죽은 것과 «상품이 없는 쇼핑몰» 은 손님에게 다르게 보여야 한다.
-    // 빈 목록으로 삼키면 품절과 구분되지 않는다.
-    if (!(error instanceof SemoFeedError)) throw error;
-    console.error("[shop]", error.message);
-    loadFailed = true;
+    if (!(error instanceof SemoFeedError)) throw error
+    console.error('[shop/home]', error.message)
+    feedFailed = true
   }
 
-  /**
-   * `?q=` 는 **서버에서 읽지 않는다.**
-   *
-   * 페이지가 `searchParams` 를 받는 순간 이 라우트는 통째로 요청마다 렌더된다. 검색어는
-   * 첫 상태를 정할 뿐이라 그 대가를 치를 이유가 없어, 클라이언트에서 읽고 정적 렌더를
-   * 지킨다. `useSearchParams` 는 Suspense 경계를 요구한다.
-   */
+  let orders: StorefrontOrder[] = []
+  if (member) {
+    try {
+      orders = (await listOrders(member.memberId)).orders
+    } catch (error) {
+      if (!(error instanceof OrderError)) throw error
+      console.error('[shop/home orders]', error.status, error.message)
+    }
+  }
+
   return (
-    <Suspense fallback={null}>
-      <Shop
-        categories={categories}
-        initialItems={initialItems}
-        initialTotal={initialTotal}
-        loadFailed={loadFailed}
-      />
-    </Suspense>
-  );
+    <main className="min-h-screen bg-white">
+      <ShopNav />
+
+      <div className="container-shop space-y-14 pt-6 pb-24">
+        {isStubCatalog() && (
+          <p className="bg-highlight-soft text-highlight-strong rounded-xl px-4 py-2.5 text-xs font-semibold">
+            예시 데이터로 그려진 화면입니다 — 세모 피드 키가 연결되면 승인 품목·실제 단가로 바뀝니다.
+          </p>
+        )}
+
+        <SubscriptionHero loggedIn={Boolean(member)} />
+
+        {feedFailed ? (
+          <p role="alert" className="rounded-xl bg-[#FDECEC] px-4 py-3 text-sm leading-6 text-[#B3261E]">
+            상품을 불러오지 못했습니다. 잠시 후 다시 열어 주세요.
+          </p>
+        ) : (
+          curation && (
+            <>
+              <SeasonStrip featured={curation.featuredSeason} others={curation.otherSeasons} today={today} />
+              <MdCuration
+                mdPicks={curation.mdPicks}
+                byBenchmark={curation.byBenchmark}
+                popular={curation.popular}
+              />
+            </>
+          )
+        )}
+
+        <ReorderPanel viewerName={member?.displayName ?? null} orders={orders} month={month} />
+
+        {categoryCount > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-light-soft px-6 py-5">
+            <p className="text-text text-sm">
+              찾는 품목이 정해져 있다면 <strong className="font-semibold">전체 {categoryCount.toLocaleString('ko-KR')}품목</strong>에서
+              분류·검색으로 바로 가세요.
+            </p>
+            <Link
+              href="/shop/products"
+              className="bg-primary hover:bg-primary-dark rounded-full px-5 py-2.5 text-sm font-semibold text-white transition-colors"
+            >
+              전체 상품 보기
+            </Link>
+          </div>
+        )}
+      </div>
+    </main>
+  )
 }
