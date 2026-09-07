@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" width="800" height="800" role="img" aria-label="우체국 선장품 선물 상자">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFF6F3"/>
+      <stop offset="1" stop-color="#FDE9E4"/>
+    </linearGradient>
+    <linearGradient id="box" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#E8432E"/>
+      <stop offset="1" stop-color="#C9301D"/>
+    </linearGradient>
+    <linearGradient id="lid" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F25A46"/>
+      <stop offset="1" stop-color="#DC3A26"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="800" fill="url(#bg)"/>
+  <ellipse cx="400" cy="640" rx="250" ry="34" fill="#C9301D" opacity="0.12"/>
+  <!-- 상자 몸통 -->
+  <rect x="190" y="360" width="420" height="270" rx="18" fill="url(#box)"/>
+  <rect x="190" y="360" width="420" height="270" rx="18" fill="#000" opacity="0.06"/>
+  <!-- 뚜껑 -->
+  <rect x="160" y="296" width="480" height="96" rx="16" fill="url(#lid)"/>
+  <!-- 세로 리본 -->
+  <rect x="372" y="296" width="56" height="334" fill="#FFFFFF" opacity="0.94"/>
+  <!-- 가로 리본 -->
+  <rect x="160" y="326" width="480" height="36" fill="#FFFFFF" opacity="0.94"/>
+  <!-- 리본 매듭 -->
+  <path d="M400 300 C 340 230, 250 240, 262 292 C 270 326, 340 320, 400 300 Z" fill="#FFFFFF" stroke="#F3B5AA" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M400 300 C 460 230, 550 240, 538 292 C 530 326, 460 320, 400 300 Z" fill="#FFFFFF" stroke="#F3B5AA" stroke-width="6" stroke-linejoin="round"/>
+  <circle cx="400" cy="300" r="22" fill="#FFFFFF" stroke="#F3B5AA" stroke-width="6"/>
+  <!-- 제비 마크(우체국 상징을 단순화한 실루엣) -->
+  <path d="M368 470 C 390 452, 420 452, 442 470 C 424 468, 412 480, 405 496 C 398 480, 386 468, 368 470 Z" fill="#FFFFFF" opacity="0.9"/>
+  <text x="400" y="718" text-anchor="middle" font-family="Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif" font-size="30" font-weight="600" fill="#9A2A1C" opacity="0.85">우체국 선장품</text>
+  <text x="400" y="752" text-anchor="middle" font-family="Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif" font-size="20" fill="#9A2A1C" opacity="0.6">대표 이미지 · 실제 상품 사진 준비 중</text>
+</svg>

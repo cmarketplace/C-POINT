@@ -16,4 +16,9 @@ export const PRODUCT_IMAGES = {
   color: "/images/products/solvent_0.jpg",
   petri: "/images/products/petri_0.jpg",
   ppe: "/images/products/mask_0.jpg",
+  /**
+   * 우체국 선장품 — 실제 상품 사진이 없어 «우체국 선물» 모양의 대표 이미지로 연다(2026-09-07 결정).
+   * 사진이 준비되면 세모 `image_url` 이 이걸 이긴다(`semo-feed.ts` remoteImage 가 먼저).
+   */
+  seonjang: "/images/seonjang-gift.svg",
 };
