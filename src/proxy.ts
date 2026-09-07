@@ -25,13 +25,13 @@ const gate = auth((request) => {
     if (request.nextUrl.pathname.startsWith('/api/')) {
       return NextResponse.json({ message: '로그인이 필요합니다.' }, { status: 401 })
     }
-    // **로그인 화면을 거치지 않고** 곧장 씨마켓으로 보낸다 — 본진에 로그인해 있는 사람은
-    // 버튼을 누르는 단계 없이 화면 전환만으로 들어와야 한다는 것이 이 몰의 요구다.
-    // (KCL 몰은 반대로 `/login` 을 한 번 세운다. 그쪽은 단일 기관 폐쇄몰이라 «남의 로그인
-    //  화면이 영문 모르고 뜨는» 쪽을 더 무겁게 봤다. 이 몰은 씨마켓 회원만 오는 곳이다.)
-    const startUrl = new URL('/api/auth/start', request.nextUrl.origin)
-    startUrl.searchParams.set('next', request.nextUrl.pathname + request.nextUrl.search)
-    return NextResponse.redirect(startUrl)
+    // 몰 안의 로그인 안내 화면을 먼저 세운다(2026-09-08 결정). 곧장 씨마켓 authorize 로 보내면
+    // 링크를 타고 온 사람이 «왜 갑자기 씨마켓 로그인이 뜨나» 를 모른다 — 씨마켓 회원만 이용할 수
+    // 있다는 말과 회원가입 문이 한 화면에 있어야 한다. 씨마켓 사이드바에서 오는 무클릭 진입은
+    // `/api/auth/start` 를 직접 가리키므로 그대로 화면 전환만으로 들어온다.
+    const loginUrl = new URL('/login', request.nextUrl.origin)
+    loginUrl.searchParams.set('next', request.nextUrl.pathname + request.nextUrl.search)
+    return NextResponse.redirect(loginUrl)
   }
 
   if (!isAllowedGroup(session.user.groupCode)) {

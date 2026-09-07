@@ -9,10 +9,10 @@ import { IS_SSO_CONFIGURED, isAllowedGroup, safeNextPath } from '@/lib/shop-auth
 /**
  * 로그인 화면.
  *
- * **평소에는 이 화면을 보지 않는다.** `/shop` 접근은 `proxy.ts` 가 씨마켓으로 곧장 보내고,
- * 본진에 로그인해 있으면 화면 전환만으로 들어온다. 여기는 그 흐름이 **끊겼을 때** 서는 자리다 —
- * 기관 자격 거절, 설정 미비, 씨마켓에서 로그인을 취소하고 돌아온 경우, 그리고 직접 방문.
- * 그래서 버튼이 남아 있다: 사유를 보고 다시 시도할 곳이 필요하다.
+ * 비로그인으로 몰(`/shop`)에 오면 `proxy.ts` 가 여기로 보낸다(2026-09-08). 이 몰은 씨마켓
+ * 회원만 이용할 수 있고, 그 사실과 회원가입 문을 한 화면에서 보여 준 뒤 씨마켓 로그인으로
+ * 넘긴다. 씨마켓 사이드바에서 오는 무클릭 진입(`/api/auth/start`)은 이 화면을 거치지 않는다.
+ * 기관 자격 거절·설정 미비·로그인 취소 후 복귀도 여기서 사유를 보고 다시 시도한다.
  */
 export default async function LoginPage({
   searchParams,
@@ -42,9 +42,10 @@ export default async function LoginPage({
 
   return (
     <LoginShell>
-      <p className="text-muted mt-3 text-sm leading-6">
-        상품 구경은 로그인 없이 할 수 있습니다. 주문과 주문 내역 확인에만 씨마켓
-        계정이 필요합니다.
+      <p className="text-text mt-3 text-base font-semibold">씨마켓 회원 로그인이 필요합니다</p>
+      <p className="text-muted mt-2 text-sm leading-6">
+        씨마켓몰은 씨마켓 회원만 이용할 수 있습니다. 발주기관은 공급사별 단가와 낙찰가 기준을
+        비교해 주문하고, 공급사 회원은 씨마켓몰 판매가로 안전결제 구매를 할 수 있습니다.
       </p>
 
       {error === 'not_allowed' ? (
@@ -69,6 +70,19 @@ export default async function LoginPage({
           씨마켓 계정으로 로그인
         </button>
       </form>
+
+      <p className="text-muted mt-4 text-center text-xs leading-5">
+        아직 씨마켓 회원이 아니라면{' '}
+        <a
+          href={TENANT.bidRegisterUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="text-primary font-semibold underline underline-offset-2"
+        >
+          씨마켓에서 회원가입
+        </a>
+        {' '}후 이용할 수 있습니다.
+      </p>
     </LoginShell>
   )
 }
