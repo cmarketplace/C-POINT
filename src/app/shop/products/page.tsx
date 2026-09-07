@@ -5,9 +5,14 @@ import type { Product } from "@/components/Shop/product.data";
 import {
   fetchStorefrontCategories,
   fetchStorefrontPage,
+  maskProducts,
   SemoFeedError,
   type StorefrontCategoryGroup,
 } from "@/lib/catalog";
+import { getShopMember } from "@/lib/shop-member";
+
+// 보는 사람 등급에 따라 목록의 기준값이 빠진다 — 요청마다 그린다.
+export const dynamic = "force-dynamic";
 
 export default async function ShopPage() {
   let categories: StorefrontCategoryGroup[] | null = null;
@@ -20,12 +25,13 @@ export default async function ShopPage() {
   try {
     // 화면은 «전체» 로 열린다. 그 칸은 분류를 걸지 않은 목록이라 여기서도 필터 없이
     // 첫 쪽을 그린다 — 조건이 다르면 브라우저가 첫 렌더 직후 다시 불러 같은 화면을 두 번 그린다.
-    const [index, page] = await Promise.all([
+    const [index, page, member] = await Promise.all([
       fetchStorefrontCategories(),
       fetchStorefrontPage({ limit: 120 }),
+      getShopMember(),
     ]);
     categories = index;
-    initialItems = page.items;
+    initialItems = maskProducts(page.items, member?.tier ?? null);
     initialTotal = page.total;
   } catch (error) {
     // 피드가 죽은 것과 «상품이 없는 쇼핑몰» 은 손님에게 다르게 보여야 한다.

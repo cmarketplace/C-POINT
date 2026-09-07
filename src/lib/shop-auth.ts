@@ -24,13 +24,34 @@ export const SHOP_ALLOWED_GROUP_CODES: readonly number[] = parseGroupCodes(
 )
 
 /**
- * 로그인이 필요한 경로 — **내 기록 화면뿐이다.** `proxy.ts` 의 matcher 와 같은 범위.
+ * 로그인이 필요한 경로 — **몰 전체다**(2026-09-07 결정, 그 전엔 «내 기록» 두 화면뿐이었다).
  *
- * 열람(목록·상세·장바구니)은 로그인 없이 공개다. 주문·주문내역·영수증은 후불 계약의
- * 당사자(씨마켓 회원)가 필요해서 익명일 수 없다 — 주문 API 는 세션 없이 401 이고,
- * 이 화면들은 로그인 문으로 안내된다.
+ * 비로그인 열람을 막는 이유: 공급사도 고객으로 사는 몰이라, 공급사가 로그아웃하고 보면
+ * 경쟁사 단가가 보이는 구멍이 생긴다. 랜딩(`/`)은 여전히 공개다. `proxy.ts` 의 matcher 와 같은 범위.
  */
-export const SHOP_PROTECTED_PATHS = ['/shop/orders', '/shop/order-complete'] as const
+export const SHOP_PROTECTED_PATHS = ['/shop', '/api/shop'] as const
+
+/**
+ * 뷰어 등급 — «무엇을 보여 줄 것인가» 의 축(2026-09-07 결정).
+ *
+ *   FULL        발주기관. 공급사 실명·업체별 단가·낙찰가 기준선·등급·조합·직접 구매 전부.
+ *   RESTRICTED  공급사(고객으로 구매). 몰 판매가 한 값만 — 어느 업체인지·다른 업체는 얼마인지·
+ *               시장 기준선까지 전부 숨긴다. 주문은 안전결제만(계약 상대가 씨마켓이라 공급사가
+ *               서류 어디에도 안 나온다).
+ *
+ * 직원(EMPLOYEE)은 세션만으로 소속을 모른다 — 씨마켓 userinfo 가 «소속 회사 역할» 을 내려주기
+ * 전까지의 임시 규칙: **기관 그룹 코드가 있으면 발주기관 직원**, 없으면 제한 고객으로 본다.
+ */
+export type ViewerTier = 'FULL' | 'RESTRICTED'
+
+export function viewerTierOf(
+  role: 'BUYER' | 'SUPPLIER' | 'EMPLOYEE' | string | null | undefined,
+  groupCode: number | null | undefined,
+): ViewerTier {
+  if (role === 'BUYER') return 'FULL'
+  if (role === 'EMPLOYEE') return typeof groupCode === 'number' ? 'FULL' : 'RESTRICTED'
+  return 'RESTRICTED'
+}
 
 /**
  * SSO 가 실제로 성립하는 설정인가.

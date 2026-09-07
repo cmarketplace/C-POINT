@@ -6,7 +6,14 @@ import ReorderPanel from '@/components/Shop/Home/ReorderPanel'
 import SeasonStrip from '@/components/Shop/Home/SeasonStrip'
 import SubscriptionHero from '@/components/Shop/Home/SubscriptionHero'
 import { kstToday } from '@/config/seasons'
-import { fetchCuration, fetchStorefrontCategories, isStubCatalog, SemoFeedError, type Curation } from '@/lib/catalog'
+import {
+  fetchCuration,
+  fetchStorefrontCategories,
+  isStubCatalog,
+  maskProducts,
+  SemoFeedError,
+  type Curation,
+} from '@/lib/catalog'
 import type { StorefrontOrder } from '@/lib/order-types'
 import { listOrders, OrderError } from '@/lib/orders'
 import { getShopMember } from '@/lib/shop-member'
@@ -33,7 +40,20 @@ export default async function ShopHomePage() {
   let categoryCount = 0
   try {
     const [loaded, categories] = await Promise.all([fetchCuration(), fetchStorefrontCategories()])
-    curation = loaded
+    const tier = member?.tier ?? null
+    // 제한 고객에게는 «낙찰가 대비» 축 자체가 없다 — 목록을 접는 것으로는 부족하고 탭을 없앤다.
+    curation =
+      tier === 'FULL'
+        ? loaded
+        : {
+            ...loaded,
+            featuredSeason: loaded.featuredSeason
+              ? { ...loaded.featuredSeason, products: maskProducts(loaded.featuredSeason.products, tier) }
+              : null,
+            mdPicks: maskProducts(loaded.mdPicks, tier),
+            byBenchmark: [],
+            popular: maskProducts(loaded.popular, tier),
+          }
     categoryCount = (categories ?? []).reduce((sum, group) => sum + group.itemCount, 0)
   } catch (error) {
     if (!(error instanceof SemoFeedError)) throw error
@@ -59,6 +79,12 @@ export default async function ShopHomePage() {
         {isStubCatalog() && (
           <p className="bg-highlight-soft text-highlight-strong rounded-xl px-4 py-2.5 text-xs font-semibold">
             예시 데이터로 그려진 화면입니다 — 세모 피드 키가 연결되면 승인 품목·실제 단가로 바뀝니다.
+          </p>
+        )}
+
+        {member?.tier === 'RESTRICTED' && (
+          <p className="bg-blue-tint-2 text-primary rounded-xl px-4 py-2.5 text-xs font-semibold">
+            공급사 계정으로 보고 계십니다 — 씨마켓몰 판매가로 구매할 수 있고, 주문은 씨마켓 안전결제로 진행됩니다.
           </p>
         )}
 

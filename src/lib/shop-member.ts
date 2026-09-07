@@ -1,5 +1,7 @@
+import { cookies } from 'next/headers'
+
 import { auth } from '@/auth'
-import { IS_SSO_CONFIGURED } from '@/lib/shop-auth'
+import { IS_SSO_CONFIGURED, viewerTierOf, type ViewerTier } from '@/lib/shop-auth'
 
 /**
  * 서버 라우트·서버 컴포넌트가 「누가」를 정하는 유일한 자리.
@@ -26,15 +28,37 @@ import { IS_SSO_CONFIGURED } from '@/lib/shop-auth'
 export interface ShopMember {
   memberId: string
   displayName: string
+  /** 발주기관(FULL) / 공급사 고객(RESTRICTED) — `shop-auth.ts` 참고 */
+  tier: ViewerTier
 }
 
-export function demoMember(): ShopMember | null {
+/** 데모 역할을 바꾸는 쿠키 — `/api/demo/role?role=SUPPLIER` 가 심는다. 데모 신원이 켜진 환경에서만 읽는다. */
+export const DEMO_ROLE_COOKIE = 'cpoint.demoRole'
+
+export function isDemoMode(): boolean {
+  return Boolean(process.env.SHOP_DEMO_MEMBER?.trim())
+}
+
+/**
+ * 데모 신원의 등급. 기본은 `SHOP_DEMO_ROLE`(없으면 BUYER)이고, 쿠키가 있으면 그게 이긴다 —
+ * `next dev` 는 디렉터리당 한 인스턴스라 발주기관·공급사 화면을 나란히 띄우려면 역할을
+ * 요청 단위로 바꿀 수 있어야 한다.
+ */
+export async function demoMember(): Promise<ShopMember | null> {
   const memberId = process.env.SHOP_DEMO_MEMBER?.trim()
   if (!memberId) return null
 
+  const jar = await cookies()
+  const fromCookie = jar.get(DEMO_ROLE_COOKIE)?.value?.toUpperCase()
+  const role = fromCookie || process.env.SHOP_DEMO_ROLE?.trim().toUpperCase() || 'BUYER'
+  const tier = viewerTierOf(role, role === 'EMPLOYEE' ? 1000 : null)
   return {
-    memberId,
-    displayName: process.env.SHOP_DEMO_MEMBER_NAME?.trim() || '데모 담당자',
+    memberId: tier === 'FULL' ? memberId : `${memberId}-supplier`,
+    displayName:
+      tier === 'FULL'
+        ? process.env.SHOP_DEMO_MEMBER_NAME?.trim() || '데모 담당자'
+        : '예시공급사 박대리',
+    tier,
   }
 }
 
@@ -44,7 +68,11 @@ export async function getShopMember(): Promise<ShopMember | null> {
     const user = session?.user
 
     if (user?.memberId) {
-      return { memberId: user.memberId, displayName: user.name?.trim() || user.memberId }
+      return {
+        memberId: user.memberId,
+        displayName: user.name?.trim() || user.memberId,
+        tier: viewerTierOf(user.role, user.groupCode),
+      }
     }
   }
 

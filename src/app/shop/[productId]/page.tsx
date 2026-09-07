@@ -11,6 +11,7 @@ import {
   fetchRelatedProducts,
   isStubCatalog,
   maskForViewer,
+  maskProducts,
   SemoFeedError,
 } from "@/lib/catalog";
 import { getShopMember } from "@/lib/shop-member";
@@ -42,14 +43,15 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
   }
   if (!loaded) notFound();
 
-  const product = maskForViewer(loaded, Boolean(member));
+  const tier = member?.tier ?? null;
+  const product = maskForViewer(loaded, tier);
   // 추천은 곁들이는 칸이다 — 못 받아도 상세는 떠야 한다.
   const related = await fetchRelatedProducts(product.categoryId).catch((error: unknown) => {
     if (!(error instanceof SemoFeedError)) throw error;
     console.error("[shop/detail related]", error.message);
     return [];
   });
-  const products = related.filter(item => item.id !== product.id);
+  const products = maskProducts(related, tier).filter(item => item.id !== product.id);
 
   const detailSpecs = [
     ["제조사", product.manufacturer],
@@ -98,7 +100,7 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
               </p>
             )}
 
-            <ProductPurchase product={product} isStub={isStubCatalog()} />
+            <ProductPurchase product={product} isStub={isStubCatalog()} restricted={tier !== "FULL"} />
           </div>
         </section>
 

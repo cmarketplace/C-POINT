@@ -27,13 +27,14 @@ export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
 
   try {
+    // 등급은 요청마다 세션에서 — 목록에도 낙찰가 기준값·«N곳» 이 실리므로 목록도 접는다.
+    const member = await getShopMember();
+    const tier = member?.tier ?? null;
+
     const ids = params.get("ids");
     if (ids) {
-      const [items, member] = await Promise.all([
-        fetchProductsByIds(ids.split(",").filter(Boolean)),
-        getShopMember(),
-      ]);
-      const masked = items.map(item => maskForViewer(item, Boolean(member)));
+      const items = await fetchProductsByIds(ids.split(",").filter(Boolean));
+      const masked = items.map(item => maskForViewer(item, tier));
       return NextResponse.json({ items: masked, total: masked.length });
     }
 
@@ -47,7 +48,7 @@ export async function GET(request: Request) {
       offset: Math.max(Number(params.get("offset")) || 0, 0),
     });
 
-    return NextResponse.json(page);
+    return NextResponse.json({ ...page, items: page.items.map(item => maskForViewer(item, tier)) });
   } catch (error) {
     // 피드 장애를 빈 목록으로 삼키면 화면에서 품절과 구분되지 않는다.
     const message =

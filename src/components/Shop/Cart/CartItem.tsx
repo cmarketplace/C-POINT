@@ -71,6 +71,8 @@ export default function CartItem({ line, mode, selected, onToggleSelect }: CartI
               </option>
             ))}
           </select>
+        ) : offers.length <= 1 && !offer.supplierName ? (
+          <span className="text-muted text-xs">씨마켓몰 판매가</span>
         ) : (
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="bg-white text-text inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold">

@@ -20,6 +20,8 @@ interface CartSummaryProps {
   result: CombinationResult
   inputs: CombinationInput[]
   mode: CombinationMode
+  /** 업체가 전부 익명(제한 고객·미제공) — 업체·배송·계산서 수와 업체별 소계를 그리지 않는다. */
+  anonymous?: boolean
 }
 
 const won = (n: number) => n.toLocaleString('ko-KR')
@@ -38,7 +40,7 @@ const formatDate = (iso: string) =>
  *
  * 금액은 `cart-amounts.ts` 만 쓴다(배송비 포함 총액 = 청구 예정액).
  */
-export default function CartSummary({ result, inputs, mode }: CartSummaryProps) {
+export default function CartSummary({ result, inputs, mode, anonymous = false }: CartSummaryProps) {
   const activeQuote = useSyncExternalStore(
     subscribeActiveQuote,
     getActiveQuoteSnapshot,
@@ -93,7 +95,7 @@ export default function CartSummary({ result, inputs, mode }: CartSummaryProps) 
         </div>
 
         {/* 서류 수 — 절감액과 같은 무게로 */}
-        {hasSelection && (
+        {hasSelection && !anonymous && (
           <div className="border-bg grid grid-cols-3 gap-2 border-y border-dashed py-3 text-center">
             {[
               ['업체', `${n}곳`],
@@ -109,7 +111,7 @@ export default function CartSummary({ result, inputs, mode }: CartSummaryProps) 
         )}
 
         {/* 업체별 소계 */}
-        {result.groups.length > 0 && (
+        {result.groups.length > 0 && !anonymous && (
           <ul className="space-y-1.5">
             {result.groups.map(group => (
               <li key={group.key} className="flex items-center justify-between gap-3 text-xs">
@@ -133,7 +135,7 @@ export default function CartSummary({ result, inputs, mode }: CartSummaryProps) 
             <span className="text-text font-medium tabular-nums">{won(amounts.supply)}원</span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-muted">배송비 ({n}건)</span>
+            <span className="text-muted">배송비{anonymous ? '' : ` (${n}건)`}</span>
             <span className="text-text font-medium tabular-nums">
               {amounts.shipping > 0 ? `${won(amounts.shipping)}원` : '무료'}
             </span>

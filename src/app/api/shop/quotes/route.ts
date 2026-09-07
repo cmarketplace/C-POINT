@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { toErrorResponse } from '@/lib/api-errors'
 import { combine, type CombinationMode } from '@/lib/cart-combination'
-import { fetchProductsByIds } from '@/lib/catalog'
+import { fetchProductsByIds, maskProducts } from '@/lib/catalog'
 import {
   clampPeople,
   estimateMonthly,
@@ -113,7 +113,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: '견적 품목의 수량을 확인해 주세요.' }, { status: 400 })
     }
 
-    const products = await fetchProductsByIds(requested.map(line => line.itemId))
+    // 견적서는 손님이 보는 종이다 — 손님 등급대로 접은 상품으로 만든다(공급사명이 새지 않게).
+    const products = maskProducts(
+      await fetchProductsByIds(requested.map(line => line.itemId)),
+      member.tier,
+    )
     const byId = new Map(products.map(product => [product.id, product]))
     const missing = requested.filter(line => !byId.has(line.itemId))
     if (missing.length > 0) {
@@ -146,7 +150,7 @@ export async function POST(request: Request) {
     const quote = createQuote({
       memberId: member.memberId,
       kind: 'CART',
-      route: parseRoute(body.route),
+      route: member.tier === 'FULL' ? parseRoute(body.route) : 'SAFE',
       lines,
       shipping: result.shipping,
       subscription: null,
