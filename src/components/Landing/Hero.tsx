@@ -33,7 +33,7 @@ export default function Hero() {
 
           <p className="text-muted mx-auto mt-7 max-w-xl text-[15px] leading-[1.85] sm:text-[17px]">
             세모 물품관리시스템이 「이 몰 × 품목 × 공급사」로 승인한 조합만 목록에 오릅니다.
-            같은 품목을 여러 곳이 대면 언제나 그중 가장 싼 값으로 담깁니다.
+            공급사별 단가를 씨마켓 낙찰가와 견주어 보고, 안전결제와 직접 구매 중에 고릅니다.
           </p>
 
           <div className="mt-10 flex flex-wrap items-center justify-center gap-3">

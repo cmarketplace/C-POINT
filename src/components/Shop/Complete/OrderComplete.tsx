@@ -6,8 +6,11 @@ import { Check } from 'lucide-react'
 
 import { useShop } from '@/app/providers/ShopProvider'
 import {
+  ORDER_ROUTE_LABEL,
   ORDER_STATUS_HINT,
   ORDER_STATUS_LABEL,
+  PAYMENT_METHOD_LABEL,
+  routeSummary,
   type StorefrontOrder,
 } from '@/lib/order-types'
 import ShopNav from '../ShopNav'
@@ -61,6 +64,7 @@ export default function OrderComplete({ orderedAt, order }: OrderCompleteProps) 
 
   const statusLabel = ORDER_STATUS_LABEL[order.status]
   const statusHint = ORDER_STATUS_HINT[order.status]
+  const summary = routeSummary(order.route, order.supplierCount)
 
   return (
     <main className="bg-white">
@@ -92,6 +96,32 @@ export default function OrderComplete({ orderedAt, order }: OrderCompleteProps) 
             {statusHint && <p className="text-muted mt-3 text-sm leading-6">{statusHint}</p>}
           </div>
 
+          {/* 주문 경로 — 누구와 계약했고 계산서가 몇 장인지. 결제 화면과 같은 문구다 */}
+          <div className="mt-6 rounded-2xl border border-border p-5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-text text-base font-semibold">{ORDER_ROUTE_LABEL[order.route]}</h2>
+              {order.paymentMethod && (
+                <span className="bg-blue-tint-2 text-primary rounded-full px-3 py-1 text-xs font-semibold">
+                  {PAYMENT_METHOD_LABEL[order.paymentMethod]}
+                </span>
+              )}
+            </div>
+            <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+              {[
+                ['계약 상대', summary.counterpart],
+                ['세금계산서', summary.invoice],
+                ['결제', summary.payment],
+                ['문제 생기면', summary.support],
+                ...(order.quoteNo ? [['견적서', order.quoteNo]] : []),
+              ].map(([label, value]) => (
+                <div key={label} className="contents">
+                  <dt className="text-muted">{label}</dt>
+                  <dd className="text-text">{value}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+
           {/* 품목 — 서버가 확정한 줄이다 */}
           <div className="mt-6 rounded-2xl bg-white">
             <h2 className="text-text text-base font-semibold">주문 품목</h2>
@@ -104,8 +134,8 @@ export default function OrderComplete({ orderedAt, order }: OrderCompleteProps) 
                   <div className="min-w-0">
                     <p className="text-text truncate font-medium">{item.name}</p>
                     <p className="text-muted mt-0.5">
-                      {[item.spec, item.unit].filter(Boolean).join(' · ')}
-                      {item.spec || item.unit ? ' · ' : ''}
+                      {[item.supplierName, item.spec, item.unit].filter(Boolean).join(' · ')}
+                      {item.supplierName || item.spec || item.unit ? ' · ' : ''}
                       {item.unitPrice.toLocaleString()}원 × {item.quantity}개
                     </p>
                   </div>
@@ -125,6 +155,12 @@ export default function OrderComplete({ orderedAt, order }: OrderCompleteProps) 
               <span className="text-text font-medium">{order.totalSupply.toLocaleString()}원</span>
             </div>
             <div className="flex items-center justify-between">
+              <span className="text-muted">배송비</span>
+              <span className="text-text font-medium">
+                {order.totalShipping > 0 ? `${order.totalShipping.toLocaleString()}원` : '무료'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
               <span className="text-muted">부가세</span>
               <span className="text-text font-medium">{order.totalVat.toLocaleString()}원</span>
             </div>
@@ -135,8 +171,9 @@ export default function OrderComplete({ orderedAt, order }: OrderCompleteProps) 
               </strong>
             </div>
             <p className="text-muted text-xs leading-5">
-              지금 결제된 금액은 없습니다. 배송이 모두 끝나면 현금/카드 결제 안내가 이어지고,
-              세금계산서는 결제 후 이메일로 발송됩니다.
+              지금 결제된 금액은 없습니다. 납품 검수가 끝나면{' '}
+              {order.route === 'SAFE' ? '씨마켓이 청구서를 보내고' : `공급사 ${order.supplierCount}곳이 각각 청구하고`}
+              , 세금계산서는 결제 후 이메일로 발송됩니다.
             </p>
           </div>
 

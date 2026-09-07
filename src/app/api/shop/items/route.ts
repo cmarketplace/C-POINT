@@ -3,9 +3,11 @@ import { NextResponse } from "next/server";
 import {
   fetchProductsByIds,
   fetchStorefrontPage,
+  maskForViewer,
   SemoFeedError,
   type StorefrontSort,
-} from "@/lib/semo-feed";
+} from "@/lib/catalog";
+import { getShopMember } from "@/lib/shop-member";
 
 const SORTS: StorefrontSort[] = ["recommended", "price_asc", "price_desc", "name"];
 
@@ -17,6 +19,9 @@ const SORTS: StorefrontSort[] = ["recommended", "price_asc", "price_desc", "name
  *
  * 상품이 18,000건이 된 뒤로 «전부 받아서 클라이언트가 거르기» 가 성립하지 않는다.
  * 걸러진 결과만 넘어오게 하는 것이 이 라우트의 존재 이유다.
+ *
+ * `ids=` 모드는 **공급사별 값까지** 준다(장바구니·북마크). 비로그인이면 실명은 가린다 —
+ * 가리는 자리는 서버다(`catalog.ts` 의 `maskForViewer`).
  */
 export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
@@ -24,9 +29,12 @@ export async function GET(request: Request) {
   try {
     const ids = params.get("ids");
     if (ids) {
-      // 북마크 모드: 목록이 아니라 «이 id 들» 이다.
-      const items = await fetchProductsByIds(ids.split(",").filter(Boolean));
-      return NextResponse.json({ items, total: items.length });
+      const [items, member] = await Promise.all([
+        fetchProductsByIds(ids.split(",").filter(Boolean)),
+        getShopMember(),
+      ]);
+      const masked = items.map(item => maskForViewer(item, Boolean(member)));
+      return NextResponse.json({ items: masked, total: masked.length });
     }
 
     const sortParam = params.get("sort") as StorefrontSort | null;

@@ -9,6 +9,7 @@ import {
   getServerSnapshot as getCartServerSnapshot,
   getSnapshot as getCartSnapshot,
   removeLine,
+  setLineOffer,
   setLineQuantity,
   subscribe as subscribeCart,
   type CartLine,
@@ -23,9 +24,11 @@ import {
 interface ShopContextValue {
   cartItems: CartLine[]
   cartCount: number
-  addToCart: (product: Product, quantity?: number) => void
+  addToCart: (product: Product, quantity?: number, offerId?: string | null) => void
   removeFromCart: (productId: string) => void
   updateQuantity: (productId: string, quantity: number) => void
+  /** «직접 고르기» — 줄의 업체를 바꾼다. null 이면 자동(최저가). */
+  chooseOffer: (productId: string, offerId: string | null) => void
   clearCart: () => void
   bookmarkedIds: string[]
   isBookmarked: (productId: string) => boolean
@@ -63,6 +66,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         addToCart: addLine,
         removeFromCart: removeLine,
         updateQuantity: setLineQuantity,
+        chooseOffer: setLineOffer,
         clearCart: clearLines,
         bookmarkedIds,
         isBookmarked,

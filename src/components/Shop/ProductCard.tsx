@@ -5,8 +5,10 @@ import Link from "next/link";
 import { Bookmark, ShoppingCart } from "lucide-react";
 
 import type { Product } from "./product.data";
+import GradeBadge from "./GradeBadge";
 import Price from "./Price";
 import { useShop } from "@/app/providers/ShopProvider";
+import { bandPosition, priceGrade } from "@/lib/offer-pricing";
 
 interface ProductCardProps {
   product: Product;
@@ -17,6 +19,22 @@ export default function ProductCard({ product }: ProductCardProps) {
 
   const isInCart = cartItems.some(item => item.product.id === product.id);
   const bookmarked = isBookmarked(product.id);
+
+  // 목록 카드의 작은 밴드 — 최저가(점)와 낙찰가 중앙값(선). 기준값이 없으면 안 그린다.
+  const benchmark = product.benchmark ?? null;
+  const grade = priceGrade(product.basePrice, benchmark);
+  const bandRangeOf = benchmark
+    ? {
+        min: Math.min(product.basePrice, benchmark.medianPrice),
+        max: Math.max(product.maxPrice ?? product.basePrice, benchmark.medianPrice),
+      }
+    : null;
+  const miniRange = bandRangeOf
+    ? {
+        min: bandRangeOf.min - Math.max((bandRangeOf.max - bandRangeOf.min) * 0.15, bandRangeOf.min * 0.02),
+        max: bandRangeOf.max + Math.max((bandRangeOf.max - bandRangeOf.min) * 0.15, bandRangeOf.max * 0.02),
+      }
+    : null;
 
   // 카드 전체가 상세로 가는 Link 라, 버튼을 누를 때 이동까지 함께 일어나면 안 된다.
   const handleBookmarkClick = (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -108,17 +126,31 @@ export default function ProductCard({ product }: ProductCardProps) {
           </p>
         )}
 
+        {benchmark && miniRange && (
+          <div aria-hidden="true" className="bg-bg-secondary relative mt-3 h-1.5 rounded-full">
+            <span
+              className="bg-primary absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white"
+              style={{ left: `${bandPosition(product.basePrice, miniRange)}%` }}
+            />
+            <span
+              className="bg-text absolute top-1/2 h-3 w-0.5 -translate-x-1/2 -translate-y-1/2"
+              style={{ left: `${bandPosition(benchmark.medianPrice, miniRange)}%` }}
+            />
+          </div>
+        )}
+
         <Price price={product.basePrice} className="mt-2.5" />
 
         {/*
           여러 곳이 대는 상품이면 지금 값이 «그중 최저가» 라는 사실을 목록에서 알린다.
           한 곳뿐이면 아무 표시도 하지 않는다 — 모든 카드에 붙는 배지는 정보가 아니다.
         */}
-        {product.offerCount > 1 && (
-          <p className="mt-1 text-[11px] font-medium text-highlight-strong">
-            공급처 {product.offerCount}곳 중 최저가
-          </p>
-        )}
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+          {product.offerCount > 1 && (
+            <p className="text-[11px] font-medium text-muted">공급사 {product.offerCount}곳 중 최저가</p>
+          )}
+          <GradeBadge grade={grade} />
+        </div>
       </Link>
     </article>
   );

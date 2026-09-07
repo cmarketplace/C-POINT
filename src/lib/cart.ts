@@ -19,6 +19,11 @@ import type { Product } from '@/components/Shop/product.data'
 export interface CartLine {
   product: Product
   quantity: number
+  /**
+   * 손님이 «직접 고르기» 로 지정한 오퍼. 없으면(대부분) 조합 방식이 정한다.
+   * 상품이 갱신되어 그 오퍼가 사라지면 `cart-combination.ts` 가 최저가로 떨어뜨린다.
+   */
+  offerId?: string | null
 }
 
 const STORAGE_KEY = 'cpoint.cart'
@@ -101,7 +106,7 @@ export function getServerSnapshot(): CartLine[] {
   return EMPTY
 }
 
-export function addLine(product: Product, quantity = 1): void {
+export function addLine(product: Product, quantity = 1, offerId: string | null = null): void {
   const current = getSnapshot()
   const existing = current.find(line => line.product.id === product.id)
 
@@ -110,10 +115,20 @@ export function addLine(product: Product, quantity = 1): void {
       ? current.map(line =>
           line.product.id === product.id
             ? // 담긴 값도 최신 상품 정보로 갈아 끼운다 — 가격이 바뀌었을 수 있다.
-              { product, quantity: line.quantity + quantity }
+              // 상세에서 업체를 골라 담았으면 그 선택이 이전 선택을 덮는다.
+              { product, quantity: line.quantity + quantity, offerId: offerId ?? line.offerId ?? null }
             : line,
         )
-      : [...current, { product, quantity }],
+      : [...current, { product, quantity, offerId }],
+  )
+}
+
+/** «직접 고르기» — 줄의 업체를 바꾼다. null 이면 자동(최저가)으로 돌아간다. */
+export function setLineOffer(productId: string, offerId: string | null): void {
+  write(
+    getSnapshot().map(line =>
+      line.product.id === productId ? { ...line, offerId } : line,
+    ),
   )
 }
 
@@ -139,7 +154,8 @@ export function clearLines(): void {
 }
 
 /**
- * 담아 둔 값을 피드의 최신값으로 맞춘다.
+ * 담아 둔 값을 피드의 최신값으로 맞춘다 — **공급사별 값(offers)도 이때 붙는다.**
+ * 목록에서 담은 상품은 오퍼가 비어 있어 조합을 계산할 수 없다. `ids=` 조회는 오퍼까지 준다.
  *
  * 저장된 상품 정보는 «담던 순간» 의 사본이라 시간이 지나면 가격·품명이 어긋난다.
  * 사라진 품목(더 이상 이 몰에 승인되지 않은 것)은 장바구니에서 함께 내린다 —
@@ -162,7 +178,11 @@ export async function syncPrices(): Promise<void> {
 
     const next = current
       .filter(line => fresh.has(line.product.id))
-      .map(line => ({ product: fresh.get(line.product.id)!, quantity: line.quantity }))
+      .map(line => ({
+        product: fresh.get(line.product.id)!,
+        quantity: line.quantity,
+        offerId: line.offerId ?? null,
+      }))
 
     // 바뀐 게 없으면 쓰지 않는다 — 매번 쓰면 다른 탭이 계속 깨어난다.
     if (JSON.stringify(next) === JSON.stringify(current)) return

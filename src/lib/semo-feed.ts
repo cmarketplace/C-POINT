@@ -1,13 +1,17 @@
 import { TENANT } from "@/config/tenant";
 import { PRODUCT_IMAGES } from "@/components/Shop/image.data";
-import type { Product } from "@/components/Shop/product.data";
+import type {
+  CatalogOffer,
+  MarketBenchmark,
+  Product,
+} from "@/components/Shop/product.data";
 
 /**
  * 세모 큐레이션 피드 — 이 쇼핑몰의 상품 출처.
  *
- * 세모 마스터가 「이 쇼핑몰 × 품목 × 공급사」로 승인한 조합만 내려온다. 응답에 공급사
- * 상호·식별자는 없다. 그게 이 API 의 존재 이유다 — 손님이 공급사별 단가를 비교할 방법이
- * 아예 없어야 한다.
+ * 세모 마스터가 「이 쇼핑몰 × 품목 × 공급사」로 승인한 조합만 내려온다. 오퍼의 공급사
+ * 실명은 세모가 붙여 주는 시점부터 실리고(2026-09-07 결정), 비로그인 손님에게 가리는 것은
+ * `catalog.ts` 가 한다.
  *
  * **서버에서만 부른다.** 피드는 파트너 API 키를 요구하는데 그 키는 이 쇼핑몰 전용이
  * 아니라 씨마켓 연동 전체가 쓰는 키다. 클라이언트 번들에 들어가면 소스보기로 그대로
@@ -55,13 +59,76 @@ interface StorefrontItem {
   maxPrice?: number | null;
   /** 표시가의 부가세 축(EXCLUSIVE=공급가액) */
   taxType?: string | null;
+  /** 시장 기준값(낙찰가 중앙값). 세모 가격밴드가 채워 주기 전에는 없다. */
+  benchmark?: {
+    medianPrice?: number | null;
+    sampleCount?: number | null;
+    windowDays?: number | null;
+    asOf?: string | null;
+  } | null;
+  /** MD 큐레이션 순위·공공기관 주문 수. 세모가 붙여 주기 전에는 없다. */
+  mdRank?: number | null;
+  popularity?: number | null;
 }
 
-/** 익명 단가 리스트 한 줄 — 어느 업체인지는 끝까지 내려오지 않는다 */
-export interface StorefrontOffer {
+/**
+ * 피드의 오퍼 한 줄(원본).
+ *
+ * 예전에는 `offerId·price·priceRank` 셋뿐이었다(익명). 2026-09-07 결정으로 공급사 실명·
+ * 구간 단가·추이·신뢰도가 붙는다 — 세모가 채워 주기 전에는 전부 없으므로 선택 필드다.
+ * 몰 안에서는 `CatalogOffer`(product.data.ts) 로 정규화해서만 쓴다.
+ */
+interface StorefrontOfferRow {
   offerId: string;
   price: number;
   priceRank: number;
+  supplierId?: string | null;
+  supplierName?: string | null;
+  leadDays?: number | null;
+  minQuantity?: number | null;
+  tiers?: Array<{ minQuantity: number; price: number }> | null;
+  trend?: number[] | null;
+  trustScore?: number | null;
+  recentAwards?: number | null;
+  directPurchase?: boolean | null;
+  shippingFee?: number | null;
+  freeShippingOver?: number | null;
+}
+
+const num = (value: unknown): number | null =>
+  typeof value === "number" && Number.isFinite(value) ? value : null;
+
+function toCatalogOffer(row: StorefrontOfferRow): CatalogOffer {
+  return {
+    offerId: row.offerId,
+    price: Number(row.price) || 0,
+    priceRank: Number(row.priceRank) || 1,
+    supplierId: row.supplierId?.trim() || null,
+    supplierName: row.supplierName?.trim() || null,
+    leadDays: num(row.leadDays),
+    minQuantity: num(row.minQuantity),
+    tiers: (row.tiers ?? [])
+      .filter(tier => num(tier.minQuantity) !== null && num(tier.price) !== null)
+      .sort((a, b) => a.minQuantity - b.minQuantity),
+    trend: (row.trend ?? []).filter((value): value is number => num(value) !== null),
+    trustScore: num(row.trustScore),
+    recentAwards: num(row.recentAwards),
+    // 값이 안 내려오면 «직접 구매 가능» 으로 본다 — 세모 직거래 모델이 기본이기 때문이다.
+    directPurchase: row.directPurchase !== false,
+    shippingFee: num(row.shippingFee),
+    freeShippingOver: num(row.freeShippingOver),
+  };
+}
+
+function toBenchmark(raw: StorefrontItem["benchmark"]): MarketBenchmark | null {
+  const median = num(raw?.medianPrice);
+  if (!raw || median === null || median <= 0) return null;
+  return {
+    medianPrice: median,
+    sampleCount: num(raw.sampleCount) ?? 0,
+    windowDays: num(raw.windowDays) ?? 90,
+    asOf: raw.asOf?.trim() || "",
+  };
 }
 
 /**
@@ -169,6 +236,9 @@ function toProduct(row: StorefrontItem): Product {
     offerCount: Math.max(Number(row.offerCount) || 1, 1),
     categoryId: row.categoryId?.trim() ?? "",
     maxPrice: typeof row.maxPrice === "number" ? row.maxPrice : null,
+    benchmark: toBenchmark(row.benchmark),
+    mdRank: num(row.mdRank),
+    popularity: num(row.popularity),
   };
 }
 
@@ -246,19 +316,20 @@ export async function fetchStorefrontProduct(
 }
 
 /**
- * 이 상품을 대는 곳들의 값 — **익명**이다.
+ * 이 상품을 대는 곳들의 값.
  *
- * 응답에 공급사를 식별할 값이 하나도 없다(세모 쪽 뷰에서부터 그 컬럼이 없다).
- * 손님이 보는 것은 «몇 번째로 싼 값인가» 뿐이고, 담기는 언제나 최저가로 담긴다.
+ * 세모가 공급사 축을 붙여 주기 전에는 익명(«공급처 N»)으로 내려온다 — 그때도 밴드와
+ * 조합은 돈다(익명 오퍼는 상품끼리 같은 업체로 묶이지 않을 뿐). 실명 가림(비로그인)은
+ * 여기가 아니라 `catalog.ts` 의 `maskForViewer` 가 한다.
  */
-export async function fetchItemOffers(itemId: string): Promise<StorefrontOffer[]> {
+export async function fetchItemOffers(itemId: string): Promise<CatalogOffer[]> {
   const { slug } = feedConfig();
-  const result = await callFeed<{ offers?: StorefrontOffer[] }>(
+  const result = await callFeed<{ offers?: StorefrontOfferRow[] }>(
     `/external/storefronts/${encodeURIComponent(slug)}/items/${encodeURIComponent(itemId)}/offers`,
     {},
     { allowNotFound: true },
   );
-  return result?.offers ?? [];
+  return (result?.offers ?? []).map(toCatalogOffer);
 }
 
 /**

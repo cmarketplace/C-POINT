@@ -1,4 +1,10 @@
-import type { OrderListPage, OrderStatus, StorefrontOrder } from '@/lib/order-types'
+import type {
+  OrderListPage,
+  OrderRoute,
+  OrderStatus,
+  PaymentMethod,
+  StorefrontOrder,
+} from '@/lib/order-types'
 import { PostpaidMallError } from '@/lib/postpaid-mall-stub'
 import { resolveSemoApi, storefrontUrl } from '@/lib/semo-api'
 
@@ -50,6 +56,12 @@ interface SemoOrderPayload {
   orderNo: string
   status: string
   employeeNo: string | null
+  /** 아래 셋은 세모가 확장 필드를 받기 시작하면 실린다(`SEMO_ORDER_EXT`). 그 전에는 없다. */
+  route?: OrderRoute | null
+  paymentMethod?: PaymentMethod | null
+  quoteNo?: string | null
+  totalShipping?: number | null
+  supplierCount?: number | null
   shipToName: string
   shipToZip: string
   shipToAddress: string
@@ -67,14 +79,45 @@ interface SemoOrderPayload {
     unit: string | null
     quantity: number
     salePrice: number
+    offerId?: string | null
+    supplierName?: string | null
   }[]
 }
 
+/**
+ * 확장 필드(경로·결제수단·견적번호·오퍼 지정)를 세모에 보낼 것인가.
+ *
+ * 세모 주문 DTO 가 이 필드를 받기 전에 보내면 whitelist 검증에서 400 이 난다 — 주문이
+ * 통째로 막힌다. 그래서 기본은 **끄고**, 세모가 받기 시작한 환경에서만 `SEMO_ORDER_EXT=1`
+ * 로 켠다. 꺼져 있는 동안 몰의 경로 선택은 세모에 전달되지 않는다(로그에 남긴다).
+ */
+const SEND_EXTENDED = process.env.SEMO_ORDER_EXT === '1'
+
 function toMallOrder(order: SemoOrderPayload): StorefrontOrder {
+  const items = order.items.map(item => ({
+    seq: item.seq,
+    itemId: item.itemId,
+    name: item.name,
+    spec: item.spec,
+    unit: item.unit,
+    quantity: item.quantity,
+    unitPrice: item.salePrice,
+    offerId: item.offerId ?? null,
+    supplierName: item.supplierName ?? null,
+  }))
+  const supplierCount =
+    order.supplierCount ??
+    new Set(items.map(item => item.supplierName ?? item.offerId ?? item.itemId)).size
+
   return {
     orderNo: order.orderNo,
     status: order.status as OrderStatus,
     memberId: order.employeeNo ?? '',
+    route: order.route ?? 'SAFE',
+    paymentMethod: order.paymentMethod ?? null,
+    quoteNo: order.quoteNo ?? null,
+    totalShipping: order.totalShipping ?? 0,
+    supplierCount,
     shipToName: order.shipToName,
     shipToZip: order.shipToZip,
     shipToAddress: order.shipToAddress,
@@ -84,15 +127,7 @@ function toMallOrder(order: SemoOrderPayload): StorefrontOrder {
     totalPayable: order.totalPayable,
     canceledAt: order.canceledAt,
     createdAt: order.createdAt,
-    items: order.items.map(item => ({
-      seq: item.seq,
-      itemId: item.itemId,
-      name: item.name,
-      spec: item.spec,
-      unit: item.unit,
-      quantity: item.quantity,
-      unitPrice: item.salePrice,
-    })),
+    items,
   }
 }
 
@@ -100,9 +135,19 @@ export async function semoCreateOrder(input: {
   memberId: string
   shipTo: { name: string; zip: string; address: string; tel: string | null }
   /** 세모는 품목 id 와 수량만 받는다 — 단가는 카탈로그가 재확정한다(스텁과 다른 지점). */
-  lines: { itemId: string; quantity: number }[]
+  lines: { itemId: string; quantity: number; offerId: string | null }[]
   clientOrderKey: string | null
+  route: OrderRoute
+  paymentMethod: PaymentMethod | null
+  quoteNo: string | null
 }): Promise<StorefrontOrder> {
+  if (!SEND_EXTENDED) {
+    console.warn(
+      '[semo-orders] SEMO_ORDER_EXT 가 꺼져 있어 주문 경로·오퍼 지정을 세모에 보내지 않습니다',
+      { route: input.route, quoteNo: input.quoteNo },
+    )
+  }
+
   const order = await semoFetch<SemoOrderPayload>('/orders', {
     method: 'POST',
     body: JSON.stringify({
@@ -113,11 +158,25 @@ export async function semoCreateOrder(input: {
         address: input.shipTo.address,
         ...(input.shipTo.tel ? { tel: input.shipTo.tel } : {}),
       },
-      items: input.lines.map(line => ({ itemId: line.itemId, quantity: line.quantity })),
+      items: input.lines.map(line => ({
+        itemId: line.itemId,
+        quantity: line.quantity,
+        ...(SEND_EXTENDED && line.offerId ? { offerId: line.offerId } : {}),
+      })),
       ...(input.clientOrderKey ? { clientOrderKey: input.clientOrderKey } : {}),
+      ...(SEND_EXTENDED
+        ? {
+            route: input.route,
+            ...(input.paymentMethod ? { paymentMethod: input.paymentMethod } : {}),
+            ...(input.quoteNo ? { quoteNo: input.quoteNo } : {}),
+          }
+        : {}),
     }),
   })
-  return toMallOrder(order)
+  const mall = toMallOrder(order)
+  // 세모가 아직 경로를 돌려주지 않으면 몰이 보낸 값을 그대로 둔다 — 영수증이 «안전결제»
+  // 라고 적어야 하는데 세모 응답만 믿으면 기본값으로 떨어진다.
+  return SEND_EXTENDED ? mall : { ...mall, route: input.route, paymentMethod: input.paymentMethod, quoteNo: input.quoteNo }
 }
 
 export async function semoListOrders(memberId: string): Promise<OrderListPage> {

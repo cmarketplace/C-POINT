@@ -1,6 +1,6 @@
 import CartView from "@/components/Shop/Cart/CartView";
 import type { Product } from "@/components/Shop/product.data";
-import { fetchStorefrontPage, SemoFeedError } from "@/lib/semo-feed";
+import { fetchStorefrontPage, isStubCatalog, SemoFeedError } from "@/lib/catalog";
 
 /**
  * 추천 캐러셀에 태울 후보 수.
@@ -24,5 +24,5 @@ export default async function CartPage() {
     console.error("[cart]", error.message);
   }
 
-  return <CartView products={products} />;
+  return <CartView products={products} isStub={isStubCatalog()} />;
 }
