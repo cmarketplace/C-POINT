@@ -36,6 +36,8 @@ import { isQuoteValid } from '@/lib/quote-types'
 interface CheckoutViewProps {
   /** 로그인한 담당자 이름. 없으면 주문 버튼이 로그인 문으로 안내한다. */
   viewerName: string | null
+  /** 제한 고객(공급사) — 안전결제만 보여 준다. 서버도 같은 판정을 다시 한다. */
+  restricted: boolean
 }
 
 const won = (n: number) => n.toLocaleString('ko-KR')
@@ -55,7 +57,7 @@ const formatDate = (iso: string) =>
  * 결제 수단은 안전결제에만 있다. 직접 구매를 고르면 카드 결제창이 사라지고 공급사별
  * 계좌 후불로 안내된다 — 카드가 필요한 기관은 자연히 안전결제로 온다.
  */
-export default function CheckoutView({ viewerName }: CheckoutViewProps) {
+export default function CheckoutView({ viewerName, restricted }: CheckoutViewProps) {
   const router = useRouter()
   const { cartItems, result } = useCartCombination()
   const shipTo = useSyncExternalStore(subscribeShipTo, getShipToSnapshot, getShipToServerSnapshot)
@@ -83,7 +85,7 @@ export default function CheckoutView({ viewerName }: CheckoutViewProps) {
   const directBlockers = lines.filter(
     line => !line.offer.directPurchase || !line.offer.supplierId,
   )
-  const directAvailable = lines.length > 0 && directBlockers.length === 0
+  const directAvailable = !restricted && lines.length > 0 && directBlockers.length === 0
   const effectiveRoute: OrderRoute = route === 'DIRECT' && !directAvailable ? 'SAFE' : route
   const summary = routeSummary(effectiveRoute, n)
   const quoteUsable = activeQuote ? isQuoteValid(activeQuote) : false
@@ -179,9 +181,15 @@ export default function CheckoutView({ viewerName }: CheckoutViewProps) {
 
         <div className="mt-8 grid items-start gap-8 lg:grid-cols-[1fr_340px]">
           <div>
+            {restricted && (
+              <p className="bg-blue-tint-2 text-primary mb-4 rounded-xl px-4 py-2.5 text-xs font-semibold">
+                공급사 계정은 씨마켓 안전결제로만 주문할 수 있습니다. 계약·계산서 상대는 씨마켓입니다.
+              </p>
+            )}
+
             {/* ── 경로 카드 ── */}
             <div className="grid gap-4 md:grid-cols-2" role="radiogroup" aria-label="주문 방법">
-              {routeCards.map(card => {
+              {routeCards.filter(card => !restricted || card.key === 'SAFE').map(card => {
                 const active = effectiveRoute === card.key
                 const disabled = card.key === 'DIRECT' && !directAvailable
                 const detail = routeSummary(card.key, n)
@@ -243,7 +251,8 @@ export default function CheckoutView({ viewerName }: CheckoutViewProps) {
               })}
             </div>
 
-            {/* ── 비교표 ── */}
+            {/* ── 비교표 (발주기관만 — 제한 고객에겐 비교할 다른 경로가 없다) ── */}
+            {!restricted && (
             <div className="mt-6 overflow-x-auto">
               <table className="w-full min-w-[520px] text-sm">
                 <thead>
@@ -285,6 +294,7 @@ export default function CheckoutView({ viewerName }: CheckoutViewProps) {
                 </tbody>
               </table>
             </div>
+            )}
 
             {/* ── 결제 수단 (안전결제만) ── */}
             {effectiveRoute === 'SAFE' && (
@@ -309,9 +319,11 @@ export default function CheckoutView({ viewerName }: CheckoutViewProps) {
                     </button>
                   ))}
                 </div>
-                <p className="text-muted mt-3 text-xs leading-5">
-                  직접 구매를 고르면 카드 결제창은 사라지고 공급사 {n}곳의 계좌가 안내됩니다.
-                </p>
+                {!restricted && (
+                  <p className="text-muted mt-3 text-xs leading-5">
+                    직접 구매를 고르면 카드 결제창은 사라지고 공급사 {n}곳의 계좌가 안내됩니다.
+                  </p>
+                )}
               </div>
             )}
             {effectiveRoute === 'DIRECT' && (
@@ -376,7 +388,8 @@ export default function CheckoutView({ viewerName }: CheckoutViewProps) {
                   <div className="min-w-0">
                     <p className="text-text truncate font-medium">{line.product.name}</p>
                     <p className="text-muted mt-0.5 truncate">
-                      {line.offer.supplierName ?? `공급처 ${line.offer.priceRank}`} · {won(line.unitPrice)}원 × {line.quantity}
+                      {line.offer.supplierName ? `${line.offer.supplierName} · ` : ''}
+                      {won(line.unitPrice)}원 × {line.quantity}
                     </p>
                   </div>
                   <strong className="text-text self-end font-semibold tabular-nums">{won(line.lineTotal)}원</strong>

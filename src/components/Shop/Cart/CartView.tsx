@@ -37,6 +37,9 @@ export default function CartView({ products, isStub }: CartViewProps) {
 
   const isEmpty = cartItems.length === 0;
   const allSelected = !isEmpty && selected.length === cartItems.length;
+  // 고를 업체가 없으면(제한 고객·오퍼 하나뿐) 조합 카드는 의미가 없다.
+  const hasChoices = cartItems.some(item => (item.product.offers ?? []).length > 1);
+  const anonymous = !cartItems.some(item => (item.product.offers ?? []).some(offer => offer.supplierId));
   const assignedById = new Map(result.lines.map(line => [line.product.id, line]));
 
   return (
@@ -51,7 +54,9 @@ export default function CartView({ products, isStub }: CartViewProps) {
             </h1>
             {!isEmpty && (
               <p className="text-muted mt-2 text-sm">
-                업체는 자동으로 조합됩니다. 마음에 안 들면 «직접 고르기» 로 품목마다 지정하세요.
+                {hasChoices
+                  ? "업체는 자동으로 조합됩니다. 마음에 안 들면 «직접 고르기» 로 품목마다 지정하세요."
+                  : "씨마켓몰 판매가로 담겼습니다. 주문은 씨마켓 안전결제로 진행됩니다."}
               </p>
             )}
           </div>
@@ -69,7 +74,9 @@ export default function CartView({ products, isStub }: CartViewProps) {
         ) : (
           <div className="mt-8 grid items-start gap-8 lg:grid-cols-[1fr_360px]">
             <section className="space-y-3">
-              <CombinationModes mode={plan.mode} byMode={byMode} canSingle={canSingle} onChange={setMode} />
+              {hasChoices && (
+                <CombinationModes mode={plan.mode} byMode={byMode} canSingle={canSingle} onChange={setMode} />
+              )}
 
               <div className="flex items-center justify-between gap-4 rounded-xl bg-highlight-soft px-5 py-3.5 sm:px-6">
                 <label className="text-text flex min-h-11 cursor-pointer items-center gap-3 text-sm font-medium">
@@ -116,6 +123,7 @@ export default function CartView({ products, isStub }: CartViewProps) {
             <CartSummary
               result={result}
               mode={plan.mode}
+              anonymous={anonymous}
               inputs={selected.map(line => ({
                 product: line.product,
                 quantity: line.quantity,

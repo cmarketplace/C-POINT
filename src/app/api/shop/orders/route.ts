@@ -138,8 +138,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: shipTo }, { status: 400 })
   }
 
-  const route = parseRoute(body.route)
+  // 제한 고객(공급사)은 안전결제만 — 직접 구매는 계약서에 상대 공급사가 실린다.
+  const route = member.tier === 'FULL' ? parseRoute(body.route) : 'SAFE'
   const paymentMethod = parsePaymentMethod(body.paymentMethod, route)
+  if (member.tier !== 'FULL') {
+    for (const line of lines) line.supplierName = null
+  }
   const shipping = Math.max(0, Math.round(Number(body.shipping) || 0))
 
   // 견적번호 — 내 것이어야 하고, 유효기간 안이어야 한다. 아니면 주문을 세우지 않는다:

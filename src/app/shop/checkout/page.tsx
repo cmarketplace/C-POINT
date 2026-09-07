@@ -12,5 +12,5 @@ export const dynamic = 'force-dynamic'
  */
 export default async function CheckoutPage() {
   const member = await getShopMember()
-  return <CheckoutView viewerName={member?.displayName ?? null} />
+  return <CheckoutView viewerName={member?.displayName ?? null} restricted={member?.tier !== 'FULL'} />
 }

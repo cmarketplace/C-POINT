@@ -1,6 +1,9 @@
 import CartView from "@/components/Shop/Cart/CartView";
 import type { Product } from "@/components/Shop/product.data";
-import { fetchStorefrontPage, isStubCatalog, SemoFeedError } from "@/lib/catalog";
+import { fetchStorefrontPage, isStubCatalog, maskProducts, SemoFeedError } from "@/lib/catalog";
+import { getShopMember } from "@/lib/shop-member";
+
+export const dynamic = "force-dynamic";
 
 /**
  * 추천 캐러셀에 태울 후보 수.
@@ -17,8 +20,11 @@ export default async function CartPage() {
   let products: Product[] = [];
 
   try {
-    const page = await fetchStorefrontPage({ limit: RECOMMENDED_POOL });
-    products = page.items;
+    const [page, member] = await Promise.all([
+      fetchStorefrontPage({ limit: RECOMMENDED_POOL }),
+      getShopMember(),
+    ]);
+    products = maskProducts(page.items, member?.tier ?? null);
   } catch (error) {
     if (!(error instanceof SemoFeedError)) throw error;
     console.error("[cart]", error.message);

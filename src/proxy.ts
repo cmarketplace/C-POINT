@@ -4,12 +4,15 @@ import { auth } from '@/auth'
 import { IS_SSO_CONFIGURED, isAllowedGroup } from '@/lib/shop-auth'
 
 /**
- * «모두 개방» 몰의 문 — 지키는 것은 **내 기록 화면뿐이다** (확정 결정 2026-08-25).
+ * 몰의 문 — «/shop 전체와 /api/shop 전체» 를 지킨다 (2026-09-07 결정. 그 전엔 «내 기록» 두
+ * 화면만 지키고 열람은 공개였다).
  *
- * 열람(목록·상세·장바구니)은 로그인 없이 공개라 matcher 자체가 그 경로를 보지 않는다.
- * 주문 내역·영수증은 «누구의 기록인가» 없이는 그릴 수 없어 세션을 요구한다 — 주문 API
- * (`/api/shop/orders`)는 이 게이트와 별개로 스스로 401 을 낸다(문이 둘이어야, 한쪽
- * 설정이 넓어져도 남의 주문이 새지 않는다).
+ * 비로그인 열람을 막는 이유: 공급사도 고객으로 사는 몰이라, 공급사가 로그아웃하고 보면
+ * 경쟁사 단가가 보이는 구멍이 생긴다. 랜딩(`/`)은 matcher 밖이라 계속 공개다.
+ * 화면은 씨마켓 로그인으로 보내고, API 는 401 JSON 을 준다(브라우저 fetch 에 302 를 주면
+ * HTML 이 JSON 자리에 들어와 «상품을 불러오지 못했습니다» 로 잘못 읽힌다).
+ * 주문·견적 API 는 이 게이트와 별개로 스스로 401 을 낸다(문이 둘이어야 한쪽 설정이
+ * 넓어져도 남의 주문이 새지 않는다).
  *
  * 세션 검증은 이 도메인이 직접 발급한 서명 세션(Auth.js JWT)이다. 씨마켓 쿠키를 읽는
  * 방식이 아니다 — 씨마켓과 이 몰은 다른 등록 도메인이라 그 쿠키가 여기로 전송될 경로가
@@ -19,6 +22,9 @@ const gate = auth((request) => {
   const session = request.auth
 
   if (!session?.user) {
+    if (request.nextUrl.pathname.startsWith('/api/')) {
+      return NextResponse.json({ message: '로그인이 필요합니다.' }, { status: 401 })
+    }
     // **로그인 화면을 거치지 않고** 곧장 씨마켓으로 보낸다 — 본진에 로그인해 있는 사람은
     // 버튼을 누르는 단계 없이 화면 전환만으로 들어와야 한다는 것이 이 몰의 요구다.
     // (KCL 몰은 반대로 `/login` 을 한 번 세운다. 그쪽은 단일 기관 폐쇄몰이라 «남의 로그인
@@ -64,7 +70,7 @@ export default function proxy(...args: Parameters<typeof gate>) {
 }
 
 export const config = {
-  // 열람은 공개다 — /shop 전체가 아니라 «내 기록» 두 화면만 지킨다(shop-auth.ts 의
-  // SHOP_PROTECTED_PATHS 와 같은 범위. matcher 는 정적 문자열만 받아 여기 다시 적는다).
-  matcher: ['/shop/orders/:path*', '/shop/order-complete'],
+  // 몰 전체 + 몰 API (shop-auth.ts 의 SHOP_PROTECTED_PATHS 와 같은 범위.
+  // matcher 는 정적 문자열만 받아 여기 다시 적는다). `/shop/:path*` 는 `/shop` 자체도 잡는다.
+  matcher: ['/shop/:path*', '/api/shop/:path*'],
 }

@@ -1,8 +1,10 @@
-import type { Product } from '@/components/Shop/product.data'
+import type { CatalogOffer, PriceTier, Product } from '@/components/Shop/product.data'
 import { upcomingSeasons, type SeasonEvent } from '@/config/seasons'
 import { stubCategories, stubPage, stubProduct } from '@/lib/catalog-stub'
+import { bestOffer, unitPriceAt } from '@/lib/offer-pricing'
 import { isSemoConfigured } from '@/lib/semo-api'
 import * as semo from '@/lib/semo-feed'
+import type { ViewerTier } from '@/lib/shop-auth'
 
 export { SemoFeedError } from '@/lib/semo-feed'
 export type {
@@ -73,25 +75,74 @@ export async function fetchRelatedProducts(categoryId: string | null | undefined
   return semo.fetchRelatedProducts(categoryId, limit)
 }
 
-/* ── 공급사 실명 가림 ─────────────────────────────────────────────── */
+/* ── 뷰어 등급별 가림 ─────────────────────────────────────────────── */
 
 /**
- * 비로그인 손님에게는 공급사 실명을 내려보내지 않는다.
+ * 손님 등급에 맞게 상품을 접는다. **서버에서만** 한다 — 클라이언트에서 감추면 응답에 실려
+ * 소스보기로 보인다.
  *
- * 이 몰은 열람이 공개다. 실명 단가가 로그인 없이 그대로 보이면 공급사 입장에서는
- * 경쟁사가 내 단가를 무료로 보는 셈이라 반발 요인이 된다. 밴드(점의 위치)와 «N곳» 은
- * 보여 주되 이름은 로그인 뒤에만. 가리는 것은 **서버**에서 한다 — 클라이언트에서 감추면
- * 응답에 이름이 실려 있어 소스보기로 보인다.
+ *   FULL        그대로.
+ *   RESTRICTED  공급사 고객. 오퍼 여러 개를 «몰 판매가» 익명 오퍼 **하나**로 접는다 —
+ *               단가는 수량마다 전 업체 최저(세모 자동매칭이 잡을 값과 같다), 업체 실명·
+ *               신뢰·리드타임·추이는 비우고, 낙찰가 기준선·등급도 없앤다. 직접 구매 불가.
+ *               «N곳» 도 1 로 — 경쟁이 몇이나 붙었는지도 정보다.
+ *
+ * 비로그인은 이 함수까지 오지 않는다(`proxy.ts` 가 막는다). 혹시 오면 RESTRICTED 로 본다.
  */
-export function maskForViewer(product: Product, loggedIn: boolean): Product {
-  const offers = product.offers ?? []
-  if (loggedIn || offers.length === 0) return { ...product, namesMasked: false }
+export function maskForViewer(product: Product, tier: ViewerTier | null | undefined): Product {
+  if (tier === 'FULL') return { ...product, namesMasked: false }
 
-  const hadNames = offers.some(offer => offer.supplierName || offer.supplierId)
+  const offers = product.offers ?? []
+  const collapsed = offers.length > 0 ? [collapseOffers(offers)] : undefined
+
   return {
     ...product,
-    namesMasked: hadNames,
-    offers: offers.map(offer => ({ ...offer, supplierId: null, supplierName: null })),
+    ...(collapsed ? { offers: collapsed } : {}),
+    offerCount: 1,
+    maxPrice: null,
+    benchmark: null,
+    namesMasked: true,
+  }
+}
+
+export function maskProducts(products: Product[], tier: ViewerTier | null | undefined): Product[] {
+  return products.map(product => maskForViewer(product, tier))
+}
+
+/** 오퍼 여러 개 → «수량별 전 업체 최저» 익명 오퍼 하나. */
+function collapseOffers(offers: CatalogOffer[]): CatalogOffer {
+  const best = bestOffer(offers, 1) ?? offers[0]
+  const thresholds = [...new Set(offers.flatMap(offer => offer.tiers.map(tier => tier.minQuantity)))]
+    .filter(min => min > 1)
+    .sort((a, b) => a - b)
+
+  const base = Math.min(...offers.map(offer => unitPriceAt(offer, 1)))
+  const tiers: PriceTier[] = []
+  let last = base
+  for (const min of thresholds) {
+    const price = Math.min(...offers.map(offer => unitPriceAt(offer, min)))
+    if (price < last) {
+      tiers.push({ minQuantity: min, price })
+      last = price
+    }
+  }
+
+  return {
+    offerId: best.offerId,
+    price: base,
+    priceRank: 1,
+    supplierId: null,
+    supplierName: null,
+    leadDays: null,
+    minQuantity: null,
+    tiers,
+    trend: [],
+    trustScore: null,
+    recentAwards: null,
+    directPurchase: false,
+    // 진짜 업체를 숨기면 업체 단위 배송비도 계산할 수 없다 — 확정 시 세모가 잡는다.
+    shippingFee: null,
+    freeShippingOver: null,
   }
 }
 

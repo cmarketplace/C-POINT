@@ -27,6 +27,8 @@ interface ProductPurchaseProps {
   product: Product;
   /** 예시 카탈로그(세모 키 없음)로 그려진 화면인가 — 숫자 옆에 «예시» 를 붙인다. */
   isStub: boolean;
+  /** 제한 고객(공급사) — 서버가 오퍼를 «몰 판매가» 하나로 접어 보냈다. 문구만 그에 맞춘다. */
+  restricted: boolean;
 }
 
 const won = (n: number) => n.toLocaleString("ko-KR");
@@ -41,7 +43,7 @@ const SLIDER_MAX = 100;
  *
  * 오퍼가 하나뿐이거나(한 곳) 아직 안 내려오면 밴드·표 없이 예전처럼 단가 한 줄이다.
  */
-export default function ProductPurchase({ product, isStub }: ProductPurchaseProps) {
+export default function ProductPurchase({ product, isStub, restricted }: ProductPurchaseProps) {
   const [quantity, setQuantity] = useState(1);
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
   const { cartItems, addToCart, updateQuantity, chooseOffer } = useShop();
@@ -58,8 +60,7 @@ export default function ProductPurchase({ product, isStub }: ProductPurchaseProp
 
   const isInCart = cartItems.some(item => item.product.id === product.id);
   const brandLabel = [...new Set([product.brand, product.manufacturer].filter(Boolean))].join(" · ");
-  const showBand = offers.length >= 2 || Boolean(benchmark);
-  const loginHref = `/login?next=${encodeURIComponent(`/shop/${product.id}`)}`;
+  const showBand = !restricted && (offers.length >= 2 || Boolean(benchmark));
 
   const handleAddToCart = () => {
     const offerId = picked ? picked.offerId : null;
@@ -150,9 +151,14 @@ export default function ProductPurchase({ product, isStub }: ProductPurchaseProp
         <div className="flex items-start justify-between gap-6">
           <div className="min-w-0">
             <p className="text-primary text-xs font-semibold">
-              {chosen ? (picked ? "직접 고른 공급사" : "자동 선정 공급사") : TENANT.priceLabel}
+              {restricted || !chosen ? TENANT.priceLabel : picked ? "직접 고른 공급사" : "자동 선정 공급사"}
             </p>
-            {chosen && (
+            {restricted && (
+              <p className="text-muted mt-1 text-xs leading-5">
+                씨마켓몰이 확정한 판매가입니다. 주문은 씨마켓 안전결제로 진행되고 계약·계산서 상대는 씨마켓입니다.
+              </p>
+            )}
+            {chosen && !restricted && (
               <>
                 <p className="text-text mt-1 flex flex-wrap items-center gap-2 text-lg font-semibold">
                   {supplierLabel(chosen)}
@@ -214,7 +220,7 @@ export default function ProductPurchase({ product, isStub }: ProductPurchaseProp
       </div>
 
       {/* ── 공급사별 표 ── */}
-      {offers.length >= 2 && (
+      {!restricted && offers.length >= 2 && (
         <section className="mt-4">
           <OfferTable
             offers={offers}
@@ -222,8 +228,6 @@ export default function ProductPurchase({ product, isStub }: ProductPurchaseProp
             bestOfferId={auto?.offerId ?? null}
             selectedOfferId={picked?.offerId ?? null}
             onSelect={toggleOffer}
-            namesMasked={Boolean(product.namesMasked)}
-            loginHref={loginHref}
           />
           <p className="text-muted mt-2 text-[11px] leading-relaxed">
             추이는 공급사가 몰에 등록한 단가의 월별 변동입니다. 업체를 고르지 않으면 수량 기준 최저가로

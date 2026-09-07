@@ -1,7 +1,5 @@
 'use client'
 
-import Link from 'next/link'
-
 import Sparkline from '@/components/Shop/Sparkline'
 import type { CatalogOffer } from '@/components/Shop/product.data'
 import { rankOffers, supplierLabel, unitPriceAt } from '@/lib/offer-pricing'
@@ -12,9 +10,6 @@ interface OfferTableProps {
   bestOfferId: string | null
   selectedOfferId: string | null
   onSelect: (offerId: string) => void
-  /** 비로그인이라 실명이 가려졌다 — 표 위에 «로그인하면» 안내를 덮는다. */
-  namesMasked: boolean
-  loginHref: string
 }
 
 const won = (n: number) => n.toLocaleString('ko-KR')
@@ -31,8 +26,6 @@ export default function OfferTable({
   bestOfferId,
   selectedOfferId,
   onSelect,
-  namesMasked,
-  loginHref,
 }: OfferTableProps) {
   const ranked = rankOffers(offers, quantity)
   const hasTrend = ranked.some(offer => offer.trend.length >= 2)
@@ -42,7 +35,7 @@ export default function OfferTable({
 
   return (
     <div className="relative">
-      <div className={`overflow-x-auto ${namesMasked ? 'select-none blur-[3px]' : ''}`} aria-hidden={namesMasked}>
+      <div className="overflow-x-auto">
         <table className="w-full min-w-[640px] text-sm">
           <thead>
             <tr className="text-muted text-left text-xs whitespace-nowrap">
@@ -111,22 +104,6 @@ export default function OfferTable({
           </tbody>
         </table>
       </div>
-
-      {namesMasked && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="rounded-xl bg-white/95 px-5 py-4 text-center shadow-[0_12px_32px_rgba(1,35,80,0.14)]">
-            <p className="text-text text-sm font-semibold">
-              로그인하면 공급사 {offers.length}곳의 실명 단가와 추이를 볼 수 있습니다
-            </p>
-            <Link
-              href={loginHref}
-              className="bg-primary hover:bg-primary-dark mt-3 inline-flex h-10 items-center rounded-control px-5 text-sm font-semibold text-white transition-colors"
-            >
-              씨마켓 계정으로 로그인
-            </Link>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
