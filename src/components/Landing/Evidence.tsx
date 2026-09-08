@@ -8,33 +8,30 @@
  * 세 칸 모두 **지금 동작하는 것**만 적었다. 「주문 접수」는 아직 세모로 넘기는 경로가 없어
  * (장바구니 요약에도 「준비 중」이 서 있다) 랜딩에서 약속하지 않는다.
  */
+import { RevealCard, RevealSection, RevealTitle } from './SectionReveal'
+
 export default function Evidence() {
   return (
-    <section id="evidence" className="bg-white py-20 sm:py-28">
-      <div className="container-content px-5 sm:px-10">
-        <div className="mx-auto max-w-2xl text-center">
-          {/* pill 라벨 — §6③. Primary Blue 면에 흰 글자. */}
-          <span className="bg-primary inline-flex items-center rounded-full px-3.5 py-1.5 text-xs font-semibold text-white">
-            이 몰이 하는 일
-          </span>
-
-          <h2 className="text-text mt-6 text-[28px] leading-[1.32] font-semibold sm:text-[40px]">
-            고르는 시간을 줄이고,
+    <RevealSection id="evidence" className="relative overflow-hidden py-16 sm:py-20">
+      <div className="container-content relative z-[2] px-5 sm:px-10">
+        <RevealTitle className="mx-auto max-w-3xl text-center">
+          <h2 className="text-text text-[28px] leading-[1.32] font-semibold sm:text-[38px] lg:text-[40px]">
+            찾고 비교하는 과정은 <span className="keyword-gradient-glow">줄이고</span>
             <br />
-            단가는 <span className="text-primary">이미 정해져</span> 있습니다
+            필요한 상품을 <span className="keyword-gradient-glow">바로</span>
           </h2>
 
           <p className="text-muted mt-6 text-[15px] leading-[1.8] sm:text-base">
-            공급사를 찾고 견적을 모으는 일은 세모가 미리 끝내 둡니다.
+            공급사를 찾고 견적을 모으는 일은 씨마켓몰이 미리 끝내 둡니다.
             <br className="hidden sm:block" />
             담당자는 승인된 목록에서 고르기만 하면 됩니다.
           </p>
-        </div>
+        </RevealTitle>
 
-        <div className="mt-14 grid gap-5 lg:grid-cols-3">
+        <RevealCard className="mt-14 grid gap-5 lg:grid-cols-3">
           <EvidenceCard
             title="승인된 품목만 보입니다"
-            body="세모 마스터가 이 몰에 열어 준 공급사의, 그 공급사가 실제로 대는 품목만 목록에 오릅니다. 카탈로그를 뒤져 «파는 곳이 있는지» 확인할 일이 없습니다."
+            body="씨마켓몰이 승인한 공급사가 실제로 공급하는 품목만 목록에 오릅니다. 카탈로그를 뒤져 «파는 곳이 있는지» 확인할 일이 없습니다."
           >
             <CategoryChips />
           </EvidenceCard>
@@ -48,13 +45,13 @@ export default function Evidence() {
 
           <EvidenceCard
             title="담은 그대로 합계가 섭니다"
-            body="장바구니는 새로고침해도 남고, 화면을 열 때 담아 둔 값을 최신 단가로 맞춥니다. 고른 항목만 골라 합계를 확인할 수 있습니다."
+            body="장바구니는 새로고침해도 남고 화면을 열 때 담아 둔 값을 최신 단가로 맞춥니다. 고른 항목만 골라 합계를 확인할 수 있습니다."
           >
             <CartPeek />
           </EvidenceCard>
-        </div>
+        </RevealCard>
       </div>
-    </section>
+    </RevealSection>
   )
 }
 
@@ -87,7 +84,7 @@ function CategoryChips() {
   const chips = ['전체', '사무용품', '실험/연구실', '산업/MRO자재']
 
   return (
-    <div className="w-full rounded-md bg-white p-4 shadow-[0_10px_30px_rgba(20,40,80,0.07)]">
+    <div className="w-full rounded-md bg-white p-4 shadow-[0_10px_30px_rgba(38,28,80,0.07)]">
       <p className="text-muted text-[11px] font-medium">카테고리</p>
 
       <div className="mt-3 flex flex-wrap gap-1.5">
@@ -111,7 +108,7 @@ function CategoryChips() {
 /** 상세의 익명 단가 리스트(`OfferList`). 1번만 살아 있고 나머지는 취소선으로 죽는다. */
 function OfferRows() {
   return (
-    <div className="w-full rounded-md bg-white p-4 shadow-[0_10px_30px_rgba(20,40,80,0.07)]">
+    <div className="w-full rounded-md bg-white p-4 shadow-[0_10px_30px_rgba(38,28,80,0.07)]">
       <p className="text-muted text-[11px] font-medium">이 상품을 대는 곳</p>
 
       <ul className="mt-3 space-y-2">
@@ -137,7 +134,7 @@ function OfferRows() {
 /** 장바구니 요약(`CartSummary`)의 위 두 줄. */
 function CartPeek() {
   return (
-    <div className="w-full rounded-md bg-white p-4 shadow-[0_10px_30px_rgba(20,40,80,0.07)]">
+    <div className="w-full rounded-md bg-white p-4 shadow-[0_10px_30px_rgba(38,28,80,0.07)]">
       <div className="bg-highlight-soft flex items-center gap-2 rounded-control px-3 py-2">
         <span className="bg-highlight flex h-3.5 w-3.5 items-center justify-center rounded-[3px]">
           <svg viewBox="0 0 12 12" aria-hidden="true" className="h-2.5 w-2.5">

@@ -1,8 +1,11 @@
+import CategoryStrip from '@/components/Landing/CategoryStrip'
 import ClosingCTA from '@/components/Landing/ClosingCTA'
 import Contrast from '@/components/Landing/Contrast'
 import Evidence from '@/components/Landing/Evidence'
-import Hero from '@/components/Landing/Hero'
 import LandingFooter from '@/components/Landing/LandingFooter'
+import LandingHeader from '@/components/Landing/LandingHeader'
+import ProcurementStats from '@/components/Landing/ProcurementStats'
+import VideoHero from '@/components/Landing/VideoHero'
 import Stats from '@/components/Landing/Stats'
 import { getLandingStats } from '@/lib/landing-stats'
 
@@ -20,16 +23,27 @@ export default function LandingPage() {
   const stats = getLandingStats()
 
   return (
-    <>
+    <div className="landing-theme flex flex-1 flex-col">
+      <LandingHeader />
+
       <main className="flex-1">
-        <Hero />
+        <VideoHero />
+
+        {/* 히어로와 2번 섹션 사이의 낮은 띠 — 몰의 갈래를 한 줄로 훑는다 */}
+        <CategoryStrip />
+
         <Stats stats={stats} />
+
         <Evidence />
+
+        <ProcurementStats />
+
         <Contrast />
+
         <ClosingCTA />
       </main>
 
       <LandingFooter />
-    </>
+    </div>
   )
 }
