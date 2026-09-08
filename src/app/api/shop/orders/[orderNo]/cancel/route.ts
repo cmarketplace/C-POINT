@@ -25,7 +25,7 @@ export async function POST(
   const { orderNo } = await params
 
   try {
-    const order = await cancelOrder(member.memberId, orderNo)
+    const order = await cancelOrder(member.memberKey, orderNo)
     return NextResponse.json({ order })
   } catch (error) {
     return toErrorResponse(error, '주문을 취소하지 못했습니다.')

@@ -26,6 +26,17 @@ import { IS_SSO_CONFIGURED, viewerTierOf, type ViewerTier } from '@/lib/shop-aut
  */
 
 export interface ShopMember {
+  /**
+   * 이 몰의 **전역 유일 신원 키**. 씨마켓 `sub`(`role:groupCode:memberId`)다.
+   *
+   * 주문·견적의 소유는 전부 이 값으로 가른다. `memberId` 만으로 가르면 안 되는 이유:
+   * 씨마켓에는 회원(`b2b_member`)과 사번(`b2b_employee`) 두 원장이 있고 **id 공간이
+   * 겹친다**. 전체 개방 몰은 양쪽을 다 받으므로, 같은 문자열 id 를 가진 다른 두 사람의
+   * 장바구니·견적·주문이 한 키에 섞인다. 세모의 `employeeNo` 로도 이 값이 나간다 —
+   * 소유 검증(`semoGetOrder`)이 그 필드를 대조하기 때문이다.
+   */
+  memberKey: string
+  /** 화면·프리필용 씨마켓 회원/사번 id. **소유 판정에 쓰지 않는다.** */
   memberId: string
   displayName: string
   /** 발주기관(FULL) / 공급사 고객(RESTRICTED) — `shop-auth.ts` 참고 */
@@ -52,8 +63,11 @@ export async function demoMember(): Promise<ShopMember | null> {
   const fromCookie = jar.get(DEMO_ROLE_COOKIE)?.value?.toUpperCase()
   const role = fromCookie || process.env.SHOP_DEMO_ROLE?.trim().toUpperCase() || 'BUYER'
   const tier = viewerTierOf(role, role === 'EMPLOYEE' ? 1000 : null)
+  const demoId = tier === 'FULL' ? memberId : `${memberId}-supplier`
   return {
-    memberId: tier === 'FULL' ? memberId : `${memberId}-supplier`,
+    // 데모도 실제와 같은 모양의 키를 쓴다 — 모양이 다르면 데모에서만 통과하는 코드가 생긴다.
+    memberKey: `${tier === 'FULL' ? 'BUYER' : 'SUPPLIER'}::${demoId}`,
+    memberId: demoId,
     displayName:
       tier === 'FULL'
         ? process.env.SHOP_DEMO_MEMBER_NAME?.trim() || '데모 담당자'
@@ -67,8 +81,11 @@ export async function getShopMember(): Promise<ShopMember | null> {
     const session = await auth()
     const user = session?.user
 
-    if (user?.memberId) {
+    // `id`(=`sub`) 가 없으면 신원이 성립하지 않는다 — 소유를 가를 키가 없다는 뜻이라
+    // 「비로그인」으로 접는다. `memberId` 만 있는 세션을 통과시키면 소유가 겹친다.
+    if (user?.id && user.memberId) {
       return {
+        memberKey: user.id,
         memberId: user.memberId,
         displayName: user.name?.trim() || user.memberId,
         tier: viewerTierOf(user.role, user.groupCode),
