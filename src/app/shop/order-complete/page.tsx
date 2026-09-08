@@ -25,7 +25,7 @@ export default async function OrderCompletePage({ searchParams }: OrderCompleteP
 
   if (member && orderNo) {
     try {
-      order = await getOrder(member.memberId, orderNo)
+      order = await getOrder(member.memberKey, orderNo)
     } catch (error) {
       // 주문은 이미 섰다. 조회 실패로 완료 화면이 죽으면 담당자는 «주문이 안 됐다» 로
       // 읽고 한 번 더 누른다 — 그게 이 화면에서 가장 피해야 할 결과다.

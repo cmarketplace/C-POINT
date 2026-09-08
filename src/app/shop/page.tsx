@@ -64,7 +64,7 @@ export default async function ShopHomePage() {
   let orders: StorefrontOrder[] = []
   if (member) {
     try {
-      orders = (await listOrders(member.memberId)).orders
+      orders = (await listOrders(member.memberKey)).orders
     } catch (error) {
       if (!(error instanceof OrderError)) throw error
       console.error('[shop/home orders]', error.status, error.message)

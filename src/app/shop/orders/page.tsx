@@ -30,7 +30,7 @@ export default async function ShopOrdersPage() {
 
   if (member) {
     try {
-      const page = await listOrders(member.memberId)
+      const page = await listOrders(member.memberKey)
       orders = page.orders
     } catch (error) {
       // 빈 목록으로 삼키지 않는다 — «주문한 적 없음» 과 «못 불러옴» 이 같아 보이면

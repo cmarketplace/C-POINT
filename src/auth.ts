@@ -62,14 +62,60 @@ export const authConfig: NextAuthConfig = {
    */
   session: { strategy: 'jwt', maxAge: 60 * 60 },
   trustHost: true,
-  pages: { signIn: '/login' },
+  /**
+   * 실패의 **진짜 사유는 여기에만 남는다.**
+   *
+   * 화면은 사유를 두 갈래로만 가른다 — Auth.js 가 client-safe 8종 외의 오류를 통째로
+   * `Configuration` 으로 뭉개 클라이언트에 사유를 흘리지 않기 때문이다. 그런데 기본 로거는
+   * 원인(`cause`)을 찍지 않아 서버 쪽에도 남는 것이 없다. 「로그를 보라」고 적어 두고 로그가
+   * 비어 있으면 그 주석은 거짓말이다.
+   *
+   * `cause` 에 토큰 엔드포인트 응답 본문이 들어 있다 — 연동에서 막히는 자리는 거의 항상
+   * 거기다(콜백 미등록·스코프 없음·DPoP 키).
+   */
+  logger: {
+    error(error) {
+      const cause = (error as Error & { cause?: unknown }).cause
+      console.error('[auth]', error.name, '-', error.message)
+      if (cause) console.error('[auth] cause:', JSON.stringify(cause, null, 2).slice(0, 2000))
+    },
+  },
+  /**
+   * 실패도 이 몰의 화면에서 끝낸다.
+   *
+   * `error` 를 비워 두면 Auth.js 내장 페이지가 **HTTP 500 + 영문**으로 뜬다
+   * ("There is a problem with the server configuration"). 몰 디자인도 재시도 경로도 없어서
+   * 사용자가 뒤로가기로 콜백 URL 을 재생하고, 그건 1회용 state 쿠키가 이미 지워진 뒤라
+   * 또 실패한다 — KCL 몰 2026-08 실측에서 실패 콜백 42건 중 37건이 그 재생이었다.
+   */
+  pages: { signIn: '/login', error: '/login' },
   providers: [
     {
       id: 'cmarket',
       name: '씨마켓',
       type: 'oauth',
-      // 씨마켓 어드민이 발급한 파트너 키. 이 키에 `sso:login` 스코프와 아래 콜백 주소가
-      // 등록되어 있어야 한다 — 없으면 교환이 `unauthorized_client` 로 떨어진다.
+      /**
+       * 씨마켓 어드민이 발급한 **SSO 전용** 키.
+       *
+       * 세 가지가 동시에 맞아야 로그인이 열린다. 하나라도 어긋나면 교환 단계에서 죽고,
+       * 화면에는 사유가 안 나온다.
+       *
+       * 1. 스코프가 `sso:login` **단독**이어야 한다. 씨마켓은 모든 파트너 키에
+       *    「허용 IP 또는 DPoP 중 최소 하나」를 요구하는데, SSO 전용 키만 그 불변식에서
+       *    면제된다(`isSsoLoginOnlyScopes`). ERP 스코프를 얹으면 그 면제가 사라진다.
+       * 2. **허용 IP 를 비워야 한다.** 이 몰은 Vercel 서버리스라 발신 IP 가 고정되지 않는다.
+       *    목록이 있으면 절대 일치하지 않아 토큰 교환이 영구 401 이다
+       *    (`invalid_client / client IP not allowed`).
+       * 3. **DPoP 를 꺼야 한다.** 씨마켓은 DPoP 로 묶인 키의 authorization_code 교환을
+       *    거절한다 — 그 grant 가 내보내는 토큰은 backend 가 만든 SSO 토큰이라 `cnf`(jkt)를
+       *    실을 자리가 없다. KCL 몰이 2026-09-01 에 이걸로 하루를 날렸다
+       *    (`unauthorized_client`).
+       *
+       * 서버 간 호출(client_credentials)용 키가 나중에 필요해지면 **다른 키로** 발급한다.
+       * 그쪽은 DPoP 를 켜는 것이 맞고, 한 벌로 겸할 수 없다.
+       *
+       * 콜백 주소도 이 키에 정확일치로 등록되어 있어야 한다.
+       */
       clientId: process.env.CMARKET_CLIENT_ID,
       clientSecret: process.env.CMARKET_CLIENT_SECRET,
       // PKCE 는 씨마켓이 S256 만 받는다. state 는 CSRF 방지로 함께 건다.
@@ -98,6 +144,8 @@ export const authConfig: NextAuthConfig = {
     // 씨마켓 신원 축을 세션까지 끌고 간다 — 주문 화면이 "누가" 사는지 알아야 한다.
     jwt({ token, user }) {
       if (user) {
+        // `token.sub` 는 Auth.js 가 `user.id`(=씨마켓 `sub`)로 이미 채운다. 그 값이 몰의
+        // **전역 유일 키**다 — 아래 session 콜백이 그대로 옮긴다.
         token.role = user.role
         token.memberId = user.memberId
         token.groupCode = user.groupCode
@@ -108,6 +156,9 @@ export const authConfig: NextAuthConfig = {
       return token
     },
     session({ session, token }) {
+      // 씨마켓 `sub`(`role:groupCode:memberId`). **주문·견적의 소유 키는 반드시 이것**이다 —
+      // `memberId` 는 회원 원장과 사번 원장에서 값이 겹칠 수 있어 남의 주문이 섞인다.
+      session.user.id = token.sub ?? ''
       session.user.role = token.role
       session.user.memberId = token.memberId
       session.user.groupCode = token.groupCode

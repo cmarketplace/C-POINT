@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import Image from 'next/image'
 
 import { signInWithCmarket } from '@/app/actions/auth'
+import { SignInButton } from '@/app/login/SignInButton'
 import { auth } from '@/auth'
 import { TENANT } from '@/config/tenant'
 import { IS_SSO_CONFIGURED, isAllowedGroup, safeNextPath } from '@/lib/shop-auth'
@@ -63,12 +64,7 @@ export default async function LoginPage({
 
       <form action={signInWithCmarket} className="mt-8">
         <input type="hidden" name="redirectTo" value={safeNextPath(next)} />
-        <button
-          type="submit"
-          className="bg-primary hover:bg-primary-dark w-full cursor-pointer rounded-control px-5 py-3.5 text-sm font-semibold text-white transition-colors"
-        >
-          씨마켓 계정으로 로그인
-        </button>
+        <SignInButton label={error ? '다시 시도' : '씨마켓 계정으로 로그인'} />
       </form>
 
       <p className="text-muted mt-4 text-center text-xs leading-5">

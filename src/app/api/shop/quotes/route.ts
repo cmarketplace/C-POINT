@@ -73,7 +73,7 @@ export async function POST(request: Request) {
         Math.max(0, Number(body.frequencyIndex) || 0),
       )
       const quote = createQuote({
-        memberId: member.memberId,
+        memberId: member.memberKey,
         kind: 'SUBSCRIPTION',
         route: 'SAFE',
         lines: [],
@@ -148,7 +148,7 @@ export async function POST(request: Request) {
     }))
 
     const quote = createQuote({
-      memberId: member.memberId,
+      memberId: member.memberKey,
       kind: 'CART',
       route: member.tier === 'FULL' ? parseRoute(body.route) : 'SAFE',
       lines,
@@ -167,5 +167,5 @@ export async function GET() {
   if (!member) {
     return NextResponse.json({ message: '로그인이 필요합니다.' }, { status: 401 })
   }
-  return NextResponse.json({ quotes: listQuotes(member.memberId) })
+  return NextResponse.json({ quotes: listQuotes(member.memberKey) })
 }
